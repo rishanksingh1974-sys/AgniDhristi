@@ -7,7 +7,10 @@
     "test": "echo \"Error: no test specified\" && exit 1",
     "start": "node server.js"
   },
-  "keywords": [],
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "keywords": ["satellite", "stubble-burning", "insat-3ds", "sentinel-2", "monitoring"],
   "author": "",
   "license": "ISC",
   "type": "commonjs",

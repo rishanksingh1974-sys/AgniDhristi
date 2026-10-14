@@ -3,22 +3,49 @@ const path = require('path');
 const mongoose = require('mongoose');
 
 const app = express();
-const PORT = 3000;
+// CRITICAL DEPLOYMENT FIX: Read PORT from environment variable (required by Render, Heroku, Railway, Cloud Run, etc.)
+const PORT = process.env.PORT || 3000;
 
 app.use(express.json());
-app.use(express.static(__dirname));
 
-// Optional MongoDB Connection (Graceful fallback if MongoDB is not running locally)
+// DEPLOYMENT SECURITY: Prevent access to backend and sensitive files before static serving
+app.use((req, res, next) => {
+  const blockedPaths = ['/server.js', '/package.json', '/package-lock.json', '/procfile', '/.env', '/.gitignore'];
+  const lowerPath = req.path.toLowerCase();
+  if (blockedPaths.includes(lowerPath) || lowerPath.startsWith('/node_modules') || lowerPath.startsWith('/.git')) {
+    return res.status(403).type('text/plain').send('Access denied');
+  }
+  next();
+});
+
+// Serve frontend assets cleanly
+app.use(express.static(__dirname, {
+  dotfiles: 'ignore',
+  index: false
+}));
+
+// Optional MongoDB Connection (Graceful fallback if MongoDB is not running or not provided)
 const MONGO_URI = process.env.MONGO_URI || 'mongodb://127.0.0.1:27017/agnidrishti';
 let mongoConnected = false;
 
-mongoose.connect(MONGO_URI, { serverSelectionTimeoutMS: 2000 })
+// Handle connection events for deployment resilience
+mongoose.connection.on('error', (err) => {
+  mongoConnected = false;
+  console.warn('MongoDB connection issue:', err.message);
+});
+
+mongoose.connection.on('disconnected', () => {
+  mongoConnected = false;
+  console.log('MongoDB disconnected, falling back to in-memory store.');
+});
+
+mongoose.connect(MONGO_URI, { serverSelectionTimeoutMS: 2500 })
   .then(() => {
     mongoConnected = true;
     console.log('Connected to MongoDB (agnidrishti)');
   })
   .catch(() => {
-    console.log('MongoDB not detected locally — running with built-in memory store for live demo.');
+    console.log('MongoDB not detected locally/remotely — running with built-in memory store for live demo.');
   });
 
 // Mongoose Schema (FIX: default: undefined on zoneBounds so null isn't turned into [])
@@ -119,6 +146,16 @@ let memoryCases = [
   }
 ];
 
+// Cloud Deployment Health Check Endpoint (AWS, Render, Railway, Kubernetes, Docker)
+app.get('/health', (req, res) => {
+  res.status(200).json({
+    status: 'healthy',
+    uptime: Math.floor(process.uptime()),
+    database: mongoConnected ? 'mongodb' : 'in-memory',
+    timestamp: new Date().toISOString()
+  });
+});
+
 // GET all evidence packs with try/catch safety
 app.get('/api/cases', async (req, res) => {
   try {
@@ -136,7 +173,11 @@ app.get('/api/cases', async (req, res) => {
 
 // POST human verification update from Officer with try/catch safety
 app.post('/api/verify', async (req, res) => {
-  const { id, status } = req.body;
+  const { id, status } = req.body || {};
+  if (!id || !status) {
+    return res.status(400).json({ error: 'Missing required fields: id and status' });
+  }
+
   try {
     if (mongoConnected) {
       await CaseModel.updateOne({ id }, { $set: { status } });
@@ -153,6 +194,35 @@ app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'index.html'));
 });
 
-app.listen(PORT, () => {
+// Catch-all 404 for undefined routes
+app.use((req, res) => {
+  if (req.accepts('html')) {
+    res.status(404).sendFile(path.join(__dirname, 'index.html'));
+  } else {
+    res.status(404).json({ error: 'Endpoint not found' });
+  }
+});
+
+const server = app.listen(PORT, () => {
   console.log(`AgniDrishti Server running at http://localhost:${PORT}`);
+});
+
+// Graceful shutdown handling for container and PaaS platforms
+process.on('SIGTERM', () => {
+  console.log('SIGTERM signal received: closing HTTP server gracefully');
+  server.close(() => {
+    console.log('HTTP server closed');
+    mongoose.connection.close(false).then(() => {
+      console.log('MongoDB connection closed');
+      process.exit(0);
+    });
+  });
+});
+
+process.on('SIGINT', () => {
+  console.log('SIGINT signal received: closing HTTP server gracefully');
+  server.close(() => {
+    console.log('HTTP server closed');
+    process.exit(0);
+  });
 });
