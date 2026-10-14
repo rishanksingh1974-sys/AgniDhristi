@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AgniDrishti | Catching the Farm Fires Satellites Miss</title>
+  <!-- Leaflet CSS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <!-- Custom CSS File -->
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+  <!-- TOAST NOTIFICATION CONTAINER -->
+  <div id="toastContainer" class="toast-container"></div>
+
+  <!-- TOP HEADER -->
+  <header class="navbar">
+    <div class="brand">
+      <div class="logo-box">
+        <span class="logo-flame">🔥</span>
+      </div>
+      <div>
+        <h1>AgniDrishti <span class="badge-tag">INSAT-3DS + Sentinel-2</span></h1>
+        <p class="subtitle">Watch all day · Confirm on the field · Act with evidence</p>
+      </div>
+    </div>
+
+    <div class="nav-controls">
+      <!-- SATELLITE WINDOW TOGGLE -->
+      <div class="mode-switch" role="tablist" aria-label="Observation mode">
+        <button id="btnMidday" class="mode-btn" onclick="setObservationMode('midday')" role="tab" aria-selected="false">
+          <span class="mode-icon">☀️</span>
+          <span class="mode-text">
+            <strong>Midday Pass</strong>
+            <small>~10:30 am – 1:30 pm · MODIS/VIIRS</small>
+          </span>
+        </button>
+        <button id="btnEvening" class="mode-btn active" onclick="setObservationMode('evening')" role="tab" aria-selected="true">
+          <span class="mode-icon">🌙</span>
+          <span class="mode-text">
+            <strong>Evening Watch</strong>
+            <small>Every 30 mins · INSAT-3DS</small>
+          </span>
+        </button>
+      </div>
+
+      <!-- PORTAL SWITCH TABS -->
+      <div class="portal-tabs" role="tablist" aria-label="Portal selection">
+        <button id="tabOfficer" class="tab-btn active-tab" onclick="switchPortal('officer')" role="tab" aria-selected="true">
+          <span>👮</span> Officer Web Map
+        </button>
+        <button id="tabFarmer" class="tab-btn" onclick="switchPortal('farmer')" role="tab" aria-selected="false">
+          <span>🌾</span> Farmer Alert Page
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- STATUS BAR -->
+  <div class="status-bar">
+    <div id="modeBanner" class="status-message">
+      ⚡ <strong>Active Watch:</strong> INSAT-3DS thermal scans every 30 minutes (~4 km tripwire) + Sentinel-2 (10 m) before/after field check
+    </div>
+    <div class="status-metrics">
+      <span class="metric-pill metric-confirmed">🔴 Confirmed: <strong id="statConfirmed">2</strong></span>
+      <span class="metric-pill metric-false">🟡 False Alarm: <strong id="statFalseAlarm">1</strong></span>
+      <span class="metric-pill metric-late">🔵 Caught Late: <strong id="statCaughtLate">1</strong></span>
+      <span class="metric-pill metric-haze">☁️ Haze Queue: <strong id="statHaze">1</strong></span>
+    </div>
+  </div>
+
+  <!-- OFFICER WEB MAP PORTAL -->
+  <main id="officerPortal" class="main-layout">
+    <!-- LEFT: LEAFLET MAP -->
+    <section class="map-section">
+      <div id="map"></div>
+
+      <!-- SIDEBAR TOGGLE BUTTON -->
+      <button id="sidebarToggle" class="sidebar-toggle" onclick="toggleSidebar()" title="Toggle evidence panel" aria-label="Toggle evidence panel">
+        <span id="toggleIcon">◀</span>
+      </button>
+
+      <!-- MAP LEGEND -->
+      <div class="map-legend">
+        <h4>🛰️ Two Signals, One Decision</h4>
+        <div class="legend-item">
+          <span class="swatch swatch-tripwire"></span> INSAT-3DS ~4 km Heat Spike Tripwire
+        </div>
+        <div class="legend-item">
+          <span class="swatch swatch-confirmed"></span> Heat spike + scar = Confirmed burning
+        </div>
+        <div class="legend-item">
+          <span class="swatch swatch-false"></span> Spike, no scar = Likely false alarm
+        </div>
+        <div class="legend-item">
+          <span class="swatch swatch-late"></span> No spike + scar = Caught late
+        </div>
+        <div class="legend-item">
+          <span class="swatch swatch-haze"></span> Haze/cloud = Re-check next clear pass
+        </div>
+      </div>
+    </section>
+
+    <!-- RIGHT: EVIDENCE PACK PANEL -->
+    <aside id="sidebar" class="sidebar">
+      <div class="sidebar-header">
+        <div>
+          <h2>📋 Officer Evidence Pack</h2>
+          <p>Verified case list — field check before any action</p>
+        </div>
+        <span class="human-badge">🛡️ No Automatic Penalties</span>
+      </div>
+
+      <div id="evidenceContainer">
+        <!-- Loading skeleton shown before data loads -->
+        <div class="skeleton-card">
+          <div class="skeleton-line skeleton-short"></div>
+          <div class="skeleton-line"></div>
+          <div class="skeleton-line"></div>
+          <div class="skeleton-line skeleton-medium"></div>
+        </div>
+        <div class="skeleton-card">
+          <div class="skeleton-line skeleton-short"></div>
+          <div class="skeleton-line"></div>
+          <div class="skeleton-line skeleton-medium"></div>
+        </div>
+      </div>
+    </aside>
+  </main>
+
+  <!-- SIMPLE FARMER ALERT PAGE PORTAL -->
+  <section id="farmerPortal" class="farmer-container hidden">
+    <div class="farmer-banner">
+      <span class="planned-badge">🚀 Planned Feature · Options, Not Only Fines</span>
+      <h2>🌾 Simple Farmer Alert Page</h2>
+      <p>Nearby machine or crop-residue buyer options so farmers get practical support before burning happens.</p>
+    </div>
+
+    <div class="farmer-grid">
+      <!-- Machine Options -->
+      <div class="farmer-card">
+        <div class="farmer-card-header">
+          <h3>🚜 Nearby Stubble Management Machines</h3>
+          <span class="availability-badge available">2 Available</span>
+        </div>
+
+        <div class="option-item">
+          <div class="option-info">
+            <h4>Dirba Co-op Society CHC</h4>
+            <p>3 Happy Seeders • 2 Straw Balers Available</p>
+            <small class="distance-tag">📍 2.1 km from ~4 km flagged zone</small>
+          </div>
+          <button class="action-btn green-btn" onclick="bookOption('Dirba Co-op Society CHC Machine')">
+            <span>📞</span> Request Machine
+          </button>
+        </div>
+
+        <div class="option-item">
+          <div class="option-info">
+            <h4>Sunam Agro Machinery Hub</h4>
+            <p>4 Super SMS • 1 Zero-Till Drill Available</p>
+            <small class="distance-tag">📍 3.8 km from ~4 km flagged zone</small>
+          </div>
+          <button class="action-btn green-btn" onclick="bookOption('Sunam Agro Machinery Hub')">
+            <span>📞</span> Request Machine
+          </button>
+        </div>
+      </div>
+
+      <!-- Buyer Options -->
+      <div class="farmer-card">
+        <div class="farmer-card-header">
+          <h3>🏭 Nearby Crop-Residue Buyers</h3>
+          <span class="availability-badge buyer">3 Buyers</span>
+        </div>
+
+        <div class="option-item">
+          <div class="option-info">
+            <h4>Sangrur Bio-CNG Plant</h4>
+            <p>Buying baled paddy straw @ ₹180 / quintal</p>
+            <small class="distance-tag">📍 4.5 km away · Pickup available</small>
+          </div>
+          <button class="action-btn blue-btn" onclick="bookOption('Sangrur Bio-CNG Plant')">
+            <span>🤝</span> Contact Buyer
+          </button>
+        </div>
+
+        <div class="option-item">
+          <div class="option-info">
+            <h4>Barnala Biomass Pellet Unit</h4>
+            <p>Buying loose straw @ ₹140 / quintal</p>
+            <small class="distance-tag">📍 6.2 km away · Self-delivery</small>
+          </div>
+          <button class="action-btn blue-btn" onclick="bookOption('Barnala Biomass Pellet Unit')">
+            <span>🤝</span> Contact Buyer
+          </button>
+        </div>
+
+        <div class="option-item">
+          <div class="option-info">
+            <h4>Patiala Paper Mill Co-op</h4>
+            <p>Buying baled rice straw @ ₹160 / quintal</p>
+            <small class="distance-tag">📍 12 km away · Bulk pickup Thu & Sat</small>
+          </div>
+          <button class="action-btn blue-btn" onclick="bookOption('Patiala Paper Mill Co-op')">
+            <span>🤝</span> Contact Buyer
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Helpline Info -->
+    <div class="farmer-helpline">
+      <p>📞 Need help? Call the Crop Residue Management Helpline: <strong>1800-180-1551</strong> (Toll Free)</p>
+    </div>
+  </section>
+
+  <!-- Leaflet JS -->
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <!-- Custom Script -->
+  <script src="script.js"></script>
+</body>
+</html>

@@ -1,5 +1,6 @@
 const express = require('express');
 const path = require('path');
+const fs = require('fs');
 const mongoose = require('mongoose');
 
 const app = express();
@@ -18,7 +19,15 @@ app.use((req, res, next) => {
   next();
 });
 
-// Serve frontend assets cleanly
+// Serve frontend assets cleanly from public/ (Vercel standard) or project root
+const publicDir = path.join(__dirname, 'public');
+if (fs.existsSync(publicDir)) {
+  app.use(express.static(publicDir, {
+    dotfiles: 'ignore',
+    index: false
+  }));
+}
+
 app.use(express.static(__dirname, {
   dotfiles: 'ignore',
   index: false
@@ -191,12 +200,20 @@ app.post('/api/verify', async (req, res) => {
 
 // Serve Frontend
 app.get('/', (req, res) => {
+  const publicIndex = path.join(__dirname, 'public', 'index.html');
+  if (fs.existsSync(publicIndex)) {
+    return res.sendFile(publicIndex);
+  }
   res.sendFile(path.join(__dirname, 'index.html'));
 });
 
 // Catch-all 404 for undefined routes
 app.use((req, res) => {
   if (req.accepts('html')) {
+    const publicIndex = path.join(__dirname, 'public', 'index.html');
+    if (fs.existsSync(publicIndex)) {
+      return res.status(404).sendFile(publicIndex);
+    }
     res.status(404).sendFile(path.join(__dirname, 'index.html'));
   } else {
     res.status(404).json({ error: 'Endpoint not found' });
