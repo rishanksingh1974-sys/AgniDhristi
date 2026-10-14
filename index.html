@@ -4,413 +4,221 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>AgniDrishti | Catching the Farm Fires Satellites Miss</title>
-  <!-- Tailwind CSS -->
-  <script src="https://cdn.tailwindcss.com"></script>
-  <!-- Leaflet CSS & JS -->
+  <!-- Leaflet CSS -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-  <style>
-    #map { height: calc(100vh - 140px); width: 100%; }
-    .pulse-zone {
-      animation: pulse 2s infinite;
-    }
-    @keyframes pulse {
-      0% { fill-opacity: 0.15; }
-      50% { fill-opacity: 0.35; }
-      100% { fill-opacity: 0.15; }
-    }
-  </style>
+  <!-- Custom CSS File -->
+  <link rel="stylesheet" href="style.css" />
 </head>
-<body class="bg-slate-950 text-slate-100 font-sans overflow-hidden">
+<body>
 
-  <!-- TOP NAVBAR -->
-  <header class="bg-slate-900 border-b border-slate-800 px-6 py-3 flex items-center justify-between">
-    <div class="flex items-center gap-3">
-      <div class="h-9 w-9 rounded-lg bg-orange-600 flex items-center justify-center font-bold text-lg shadow-lg shadow-orange-600/30">🔥</div>
+  <!-- TOAST NOTIFICATION CONTAINER -->
+  <div id="toastContainer" class="toast-container"></div>
+
+  <!-- TOP HEADER -->
+  <header class="navbar">
+    <div class="brand">
+      <div class="logo-box">
+        <span class="logo-flame">🔥</span>
+      </div>
       <div>
-        <h1 class="text-lg font-bold tracking-wide text-white">AgniDrishti <span class="text-xs font-normal text-orange-400 bg-orange-950/60 border border-orange-800 px-2 py-0.5 rounded ml-2">INSAT-3DS + Sentinel-2 Fusion</span></h1>
-        <p class="text-xs text-slate-400">Watch all day | Confirm on the field | Act with evidence</p>
+        <h1>AgniDrishti <span class="badge-tag">INSAT-3DS + Sentinel-2</span></h1>
+        <p class="subtitle">Watch all day · Confirm on the field · Act with evidence</p>
       </div>
     </div>
 
-    <!-- TIME WINDOW TOGGLE (CORE DEMO FEATURE) -->
-    <div class="flex items-center gap-2 bg-slate-950 p-1.5 rounded-lg border border-slate-800">
-      <button id="btnMidday" onclick="setObservationMode('midday')" class="px-3 py-1.5 rounded text-xs font-semibold transition bg-slate-800 text-slate-300 hover:text-white">
-        ☀️ Midday Pass (10:30 AM – 1:30 PM | MODIS/VIIRS)
-      </button>
-      <button id="btnEvening" onclick="setObservationMode('evening')" class="px-3 py-1.5 rounded text-xs font-semibold transition bg-orange-600 text-white shadow">
-        🌙 Evening Watch (4:00 PM – 8:00 PM | INSAT-3DS 30-min Scan)
-      </button>
-    </div>
+    <div class="nav-controls">
+      <!-- SATELLITE WINDOW TOGGLE -->
+      <div class="mode-switch" role="tablist" aria-label="Observation mode">
+        <button id="btnMidday" class="mode-btn" onclick="setObservationMode('midday')" role="tab" aria-selected="false">
+          <span class="mode-icon">☀️</span>
+          <span class="mode-text">
+            <strong>Midday Pass</strong>
+            <small>~10:30 am – 1:30 pm · MODIS/VIIRS</small>
+          </span>
+        </button>
+        <button id="btnEvening" class="mode-btn active" onclick="setObservationMode('evening')" role="tab" aria-selected="true">
+          <span class="mode-icon">🌙</span>
+          <span class="mode-text">
+            <strong>Evening Watch</strong>
+            <small>Every 30 mins · INSAT-3DS</small>
+          </span>
+        </button>
+      </div>
 
-    <!-- VIEW TABS (OFFICER vs FARMER) -->
-    <div class="flex gap-2">
-      <button id="tabOfficer" onclick="switchPortal('officer')" class="px-4 py-1.5 rounded-md text-xs font-semibold bg-blue-600 text-white">
-        👮 Officer Web Map
-      </button>
-      <button id="tabFarmer" onclick="switchPortal('farmer')" class="px-4 py-1.5 rounded-md text-xs font-semibold bg-slate-800 text-slate-300 hover:bg-slate-700">
-        🌾 Farmer Alert Page
-      </button>
+      <!-- PORTAL SWITCH TABS -->
+      <div class="portal-tabs" role="tablist" aria-label="Portal selection">
+        <button id="tabOfficer" class="tab-btn active-tab" onclick="switchPortal('officer')" role="tab" aria-selected="true">
+          <span>👮</span> Officer Web Map
+        </button>
+        <button id="tabFarmer" class="tab-btn" onclick="switchPortal('farmer')" role="tab" aria-selected="false">
+          <span>🌾</span> Farmer Alert Page
+        </button>
+      </div>
     </div>
   </header>
 
-  <!-- STATUS RIBBON -->
-  <div class="bg-slate-900/60 border-b border-slate-800 px-6 py-2 flex items-center justify-between text-xs">
-    <div id="modeBanner" class="text-orange-400 font-medium">
-      ⚡ <strong>Active Mode:</strong> INSAT-3DS Evening Watch (Every 30 mins) + Sentinel-2 (10 m) Before/After Field Confirmation
+  <!-- STATUS BAR -->
+  <div class="status-bar">
+    <div id="modeBanner" class="status-message">
+      ⚡ <strong>Active Watch:</strong> INSAT-3DS thermal scans every 30 minutes (~4 km tripwire) + Sentinel-2 (10 m) before/after field check
     </div>
-    <div class="flex gap-6 text-slate-300">
-      <span>🔴 Confirmed Burning: <strong class="text-white" id="statConfirmed">2</strong></span>
-      <span>🟡 Likely False Alarm (Re-check): <strong class="text-white" id="statFalseAlarm">1</strong></span>
-      <span>🔵 Missed by Tripwire (Caught Late): <strong class="text-white" id="statCaughtLate">1</strong></span>
-      <span>☁️ Haze/Cloud Blocked: <strong class="text-white" id="statHaze">1 (Re-check next clear pass)</strong></span>
+    <div class="status-metrics">
+      <span class="metric-pill metric-confirmed">🔴 Confirmed: <strong id="statConfirmed">2</strong></span>
+      <span class="metric-pill metric-false">🟡 False Alarm: <strong id="statFalseAlarm">1</strong></span>
+      <span class="metric-pill metric-late">🔵 Caught Late: <strong id="statCaughtLate">1</strong></span>
+      <span class="metric-pill metric-haze">☁️ Haze Queue: <strong id="statHaze">1</strong></span>
     </div>
   </div>
 
-  <!-- MAIN OFFICER VIEW -->
-  <main id="officerPortal" class="grid grid-cols-12">
-    <!-- MAP COLUMN (8 Cols) -->
-    <div class="col-span-8 relative">
+  <!-- OFFICER WEB MAP PORTAL -->
+  <main id="officerPortal" class="main-layout">
+    <!-- LEFT: LEAFLET MAP -->
+    <section class="map-section">
       <div id="map"></div>
-      <!-- MAP LEGEND OVERLAY -->
-      <div class="absolute bottom-5 left-5 z-[1000] bg-slate-900/95 border border-slate-700 rounded-lg p-3 text-xs shadow-xl space-y-1.5">
-        <div class="font-bold text-slate-200 mb-1">Two Signals, One Decision Legend</div>
-        <div class="flex items-center gap-2"><span class="w-4 h-4 inline-block border-2 border-dashed border-orange-500 bg-orange-500/20"></span> INSAT-3DS ~4 km Heat Spike Tripwire</div>
-        <div class="flex items-center gap-2"><span class="w-4 h-4 inline-block bg-red-600 border border-white"></span> Heat Spike + Burn Scar = Confirmed Burning (10 m)</div>
-        <div class="flex items-center gap-2"><span class="w-4 h-4 inline-block bg-yellow-500 border border-white"></span> Spike, No Scar = Likely False Alarm (Re-check)</div>
-        <div class="flex items-center gap-2"><span class="w-4 h-4 inline-block bg-sky-500 border border-white"></span> No Spike + Scar = Caught Late on Sentinel-2</div>
-        <div class="flex items-center gap-2"><span class="w-4 h-4 inline-block bg-purple-500 border border-white"></span> Haze/Cloud = Marked "Re-check Next Clear Pass"</div>
-      </div>
-    </div>
 
-    <!-- EVIDENCE PACK SIDEBAR (4 Cols) -->
-    <aside class="col-span-4 bg-slate-900 border-l border-slate-800 p-5 overflow-y-auto" style="height: calc(100vh - 140px);">
-      <div class="flex items-center justify-between border-b border-slate-800 pb-3 mb-4">
-        <div>
-          <h2 class="text-base font-bold text-white">📋 Officer Evidence Pack</h2>
-          <p class="text-xs text-slate-400">Pilot District: Sangrur, Punjab | Human verifies every case</p>
+      <!-- SIDEBAR TOGGLE BUTTON -->
+      <button id="sidebarToggle" class="sidebar-toggle" onclick="toggleSidebar()" title="Toggle evidence panel" aria-label="Toggle evidence panel">
+        <span id="toggleIcon">◀</span>
+      </button>
+
+      <!-- MAP LEGEND -->
+      <div class="map-legend">
+        <h4>🛰️ Two Signals, One Decision</h4>
+        <div class="legend-item">
+          <span class="swatch swatch-tripwire"></span> INSAT-3DS ~4 km Heat Spike Tripwire
         </div>
-        <span class="text-[11px] bg-emerald-950 text-emerald-400 border border-emerald-800 px-2.5 py-1 rounded-full font-semibold">No Auto-Penalty</span>
+        <div class="legend-item">
+          <span class="swatch swatch-confirmed"></span> Heat spike + scar = Confirmed burning
+        </div>
+        <div class="legend-item">
+          <span class="swatch swatch-false"></span> Spike, no scar = Likely false alarm
+        </div>
+        <div class="legend-item">
+          <span class="swatch swatch-late"></span> No spike + scar = Caught late
+        </div>
+        <div class="legend-item">
+          <span class="swatch swatch-haze"></span> Haze/cloud = Re-check next clear pass
+        </div>
+      </div>
+    </section>
+
+    <!-- RIGHT: EVIDENCE PACK PANEL -->
+    <aside id="sidebar" class="sidebar">
+      <div class="sidebar-header">
+        <div>
+          <h2>📋 Officer Evidence Pack</h2>
+          <p>Verified case list — field check before any action</p>
+        </div>
+        <span class="human-badge">🛡️ No Automatic Penalties</span>
       </div>
 
-      <!-- DYNAMIC EVIDENCE CARD -->
-      <div id="evidenceContainer" class="space-y-4">
-        <!-- Populated by JS -->
+      <div id="evidenceContainer">
+        <!-- Loading skeleton shown before data loads -->
+        <div class="skeleton-card">
+          <div class="skeleton-line skeleton-short"></div>
+          <div class="skeleton-line"></div>
+          <div class="skeleton-line"></div>
+          <div class="skeleton-line skeleton-medium"></div>
+        </div>
+        <div class="skeleton-card">
+          <div class="skeleton-line skeleton-short"></div>
+          <div class="skeleton-line"></div>
+          <div class="skeleton-line skeleton-medium"></div>
+        </div>
       </div>
     </aside>
   </main>
 
-  <!-- FARMER ALERT PAGE VIEW (HIDDEN BY DEFAULT) -->
-  <section id="farmerPortal" class="hidden p-8 max-w-5xl mx-auto overflow-y-auto" style="height: calc(100vh - 140px);">
-    <div class="bg-slate-900 border border-slate-800 rounded-xl p-6 mb-6">
-      <span class="text-xs uppercase tracking-wider bg-emerald-950 text-emerald-400 border border-emerald-800 px-2.5 py-1 rounded font-semibold">Planned Feature | Support Before Fines</span>
-      <h2 class="text-2xl font-bold text-white mt-2">🌾 AgniDrishti Farmer Support & Alert Page</h2>
-      <p class="text-sm text-slate-400 mt-1">Providing nearby crop-residue machinery and biomass buyer options in Sangrur District so farmers get practical alternatives, not only fines.</p>
+  <!-- SIMPLE FARMER ALERT PAGE PORTAL -->
+  <section id="farmerPortal" class="farmer-container hidden">
+    <div class="farmer-banner">
+      <span class="planned-badge">🚀 Planned Feature · Options, Not Only Fines</span>
+      <h2>🌾 Simple Farmer Alert Page</h2>
+      <p>Nearby machine or crop-residue buyer options so farmers get practical support before burning happens.</p>
     </div>
 
-    <div class="grid grid-cols-2 gap-6">
-      <!-- Nearby Machines Card -->
-      <div class="bg-slate-900 border border-slate-800 rounded-xl p-5 space-y-4">
-        <h3 class="text-base font-bold text-orange-400">🚜 Nearby Custom Hiring Centres (Machines Within 5 km)</h3>
-        <div class="bg-slate-950 p-4 rounded-lg border border-slate-800 flex justify-between items-center">
-          <div>
-            <div class="font-semibold text-sm text-white">Dirba Co-op Society CHC</div>
-            <div class="text-xs text-slate-400">3 Happy Seeders • 2 Straw Balers Available</div>
-            <div class="text-xs text-emerald-400 mt-1">📍 2.1 km from flagged zone</div>
-          </div>
-          <button onclick="alert('Booking request sent to Dirba Co-op Society CHC!')" class="bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold px-3 py-2 rounded">Request Machine</button>
+    <div class="farmer-grid">
+      <!-- Machine Options -->
+      <div class="farmer-card">
+        <div class="farmer-card-header">
+          <h3>🚜 Nearby Stubble Management Machines</h3>
+          <span class="availability-badge available">2 Available</span>
         </div>
 
-        <div class="bg-slate-950 p-4 rounded-lg border border-slate-800 flex justify-between items-center">
-          <div>
-            <div class="font-semibold text-sm text-white">Sunam Agro Machinery Hub</div>
-            <div class="text-xs text-slate-400">4 Super SMS • 1 Zero-Till Drill Available</div>
-            <div class="text-xs text-emerald-400 mt-1">📍 3.8 km from flagged zone</div>
+        <div class="option-item">
+          <div class="option-info">
+            <h4>Dirba Co-op Society CHC</h4>
+            <p>3 Happy Seeders • 2 Straw Balers Available</p>
+            <small class="distance-tag">📍 2.1 km from ~4 km flagged zone</small>
           </div>
-          <button onclick="alert('Booking request sent to Sunam Agro Hub!')" class="bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold px-3 py-2 rounded">Request Machine</button>
+          <button class="action-btn green-btn" onclick="bookOption('Dirba Co-op Society CHC Machine')">
+            <span>📞</span> Request Machine
+          </button>
+        </div>
+
+        <div class="option-item">
+          <div class="option-info">
+            <h4>Sunam Agro Machinery Hub</h4>
+            <p>4 Super SMS • 1 Zero-Till Drill Available</p>
+            <small class="distance-tag">📍 3.8 km from ~4 km flagged zone</small>
+          </div>
+          <button class="action-btn green-btn" onclick="bookOption('Sunam Agro Machinery Hub')">
+            <span>📞</span> Request Machine
+          </button>
         </div>
       </div>
 
-      <!-- Nearby Biomass Buyers Card -->
-      <div class="bg-slate-900 border border-slate-800 rounded-xl p-5 space-y-4">
-        <h3 class="text-base font-bold text-sky-400">🏭 Nearby Parali / Stubble Buyers (Sell Instead of Burn)</h3>
-        <div class="bg-slate-950 p-4 rounded-lg border border-slate-800 flex justify-between items-center">
-          <div>
-            <div class="font-semibold text-sm text-white">Sangrur Bio-CNG Plant (Verbio)</div>
-            <div class="text-xs text-slate-400">Buying baled paddy straw @ ₹180 / quintal</div>
-            <div class="text-xs text-sky-400 mt-1">🚚 Free field pickup within 10 km</div>
-          </div>
-          <button onclick="alert('Pickup slot requested with Sangrur Bio-CNG Plant!')" class="bg-sky-600 hover:bg-sky-500 text-white text-xs font-semibold px-3 py-2 rounded">Book Pickup</button>
+      <!-- Buyer Options -->
+      <div class="farmer-card">
+        <div class="farmer-card-header">
+          <h3>🏭 Nearby Crop-Residue Buyers</h3>
+          <span class="availability-badge buyer">3 Buyers</span>
         </div>
 
-        <div class="bg-slate-950 p-4 rounded-lg border border-slate-800 flex justify-between items-center">
-          <div>
-            <div class="font-semibold text-sm text-white">Malwa Biomass Pellet Unit</div>
-            <div class="text-xs text-slate-400">Buying loose/baled straw @ ₹165 / quintal</div>
-            <div class="text-xs text-sky-400 mt-1">🚚 Tractor trolley collection available</div>
+        <div class="option-item">
+          <div class="option-info">
+            <h4>Sangrur Bio-CNG Plant</h4>
+            <p>Buying baled paddy straw @ ₹180 / quintal</p>
+            <small class="distance-tag">📍 4.5 km away · Pickup available</small>
           </div>
-          <button onclick="alert('Callback requested from Malwa Biomass Unit!')" class="bg-sky-600 hover:bg-sky-500 text-white text-xs font-semibold px-3 py-2 rounded">Book Pickup</button>
+          <button class="action-btn blue-btn" onclick="bookOption('Sangrur Bio-CNG Plant')">
+            <span>🤝</span> Contact Buyer
+          </button>
+        </div>
+
+        <div class="option-item">
+          <div class="option-info">
+            <h4>Barnala Biomass Pellet Unit</h4>
+            <p>Buying loose straw @ ₹140 / quintal</p>
+            <small class="distance-tag">📍 6.2 km away · Self-delivery</small>
+          </div>
+          <button class="action-btn blue-btn" onclick="bookOption('Barnala Biomass Pellet Unit')">
+            <span>🤝</span> Contact Buyer
+          </button>
+        </div>
+
+        <div class="option-item">
+          <div class="option-info">
+            <h4>Patiala Paper Mill Co-op</h4>
+            <p>Buying baled rice straw @ ₹160 / quintal</p>
+            <small class="distance-tag">📍 12 km away · Bulk pickup Thu & Sat</small>
+          </div>
+          <button class="action-btn blue-btn" onclick="bookOption('Patiala Paper Mill Co-op')">
+            <span>🤝</span> Contact Buyer
+          </button>
         </div>
       </div>
+    </div>
+
+    <!-- Helpline Info -->
+    <div class="farmer-helpline">
+      <p>📞 Need help? Call the Crop Residue Management Helpline: <strong>1800-180-1551</strong> (Toll Free)</p>
     </div>
   </section>
 
-  <script>
-    // Initialize Map centered on Sangrur, Punjab
-    const map = L.map('map').setView([30.245, 75.845], 12);
-
-    // Real Satellite Imagery Base Layer (Esri World Imagery)
-    L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
-      attribution: 'Tiles &copy; Esri | AgniDrishti Prototype (INSAT-3DS + Sentinel-2)'
-    }).addTo(map);
-
-    // Layer Groups
-    const eveningLayerGroup = L.layerGroup().addTo(map);
-    const middayLayerGroup = L.layerGroup();
-
-    // Sample Cases Representing All 4 Rules in PPT
-    const casesData = [
-      {
-        id: "AD-2026-01",
-        village: "Dirba Block, Sangrur",
-        coords: [30.255, 75.830],
-        zoneBounds: [[30.240, 75.810], [30.270, 75.850]], // ~4 km INSAT-3DS tripwire zone
-        fieldPoly: [[30.253, 75.828], [30.253, 75.833], [30.257, 75.833], [30.257, 75.828]], // 10m Sentinel-2 field
-        insatSpike: "Yes (17:30 IST | +4.3°C Evening Spike)",
-        sentinelScar: "Yes (10 m Burnt Scar Detected)",
-        ruleDecision: "Confirmed burning",
-        badgeColor: "bg-red-950 text-red-400 border-red-800",
-        polyColor: "#dc2626",
-        burntArea: "2.8 Acres",
-        confidence: "89% (High - Both Signals Agree)",
-        status: "Pending Officer Field Check",
-        beforeDate: "02 Nov (Green Harvested Plot)",
-        afterDate: "07 Nov (Charcoal Black Burn Scar)"
-      },
-      {
-        id: "AD-2026-02",
-        village: "Sunam East, Sangrur",
-        coords: [30.225, 75.875],
-        zoneBounds: [[30.210, 75.855], [30.240, 75.895]],
-        fieldPoly: [[30.223, 75.873], [30.223, 75.878], [30.227, 75.878], [30.227, 75.873]],
-        insatSpike: "Yes (18:00 IST | +3.1°C Evening Spike)",
-        sentinelScar: "No Scar Found on 10 m Field Photo",
-        ruleDecision: "Likely false alarm: re-check",
-        badgeColor: "bg-yellow-950 text-yellow-400 border-yellow-800",
-        polyColor: "#eab308",
-        burntArea: "0.0 Acres (Brick Kiln / Industrial Heat)",
-        confidence: "24% (Mismatch — Not Punished)",
-        status: "Flagged for Re-Check (No Penalty)",
-        beforeDate: "02 Nov (Unchanged Field)",
-        afterDate: "07 Nov (No Burn Scar)"
-      },
-      {
-        id: "AD-2026-03",
-        village: "Lehra North, Sangrur",
-        coords: [30.268, 75.885],
-        zoneBounds: null, // No INSAT spike
-        fieldPoly: [[30.266, 75.882], [30.266, 75.887], [30.270, 75.887], [30.270, 75.882]],
-        insatSpike: "No Spike (Below 4 km Tripwire Threshold)",
-        sentinelScar: "Yes (10 m Burnt Scar Detected)",
-        ruleDecision: "Missed by the tripwire, caught late",
-        badgeColor: "bg-sky-950 text-sky-400 border-sky-800",
-        polyColor: "#0ea5e9",
-        burntArea: "1.4 Acres",
-        confidence: "75% (CEEW Scar Benchmark)",
-        status: "Pending Officer Field Check",
-        beforeDate: "02 Nov (Stubble Present)",
-        afterDate: "07 Nov (Post-Burn Ash Detected)"
-      },
-      {
-        id: "AD-2026-04",
-        village: "Dhuri South, Sangrur",
-        coords: [30.215, 75.815],
-        zoneBounds: [[30.200, 75.795], [30.230, 75.835]],
-        fieldPoly: [[30.213, 75.812], [30.213, 75.818], [30.217, 75.818], [30.217, 75.812]],
-        insatSpike: "Yes (19:00 IST | +3.8°C Evening Spike)",
-        sentinelScar: "Blocked by Winter Smog / Cloud",
-        ruleDecision: "Re-check next clear pass (Never silently dropped)",
-        badgeColor: "bg-purple-950 text-purple-300 border-purple-800",
-        polyColor: "#a855f7",
-        burntArea: "Awaiting Clear Optical Pass",
-        confidence: "Pending Confirmation",
-        status: "Queued for Next Sentinel-2 Pass",
-        beforeDate: "02 Nov (Clear Baseline)",
-        afterDate: "07 Nov (Haze Obstructed - Queued)"
-      }
-    ];
-
-    // Render Evening Layers on Map
-    function renderMapLayers() {
-      eveningLayerGroup.clearLayers();
-
-      casesData.forEach((item, index) => {
-        // 1. Draw ~4 km INSAT-3DS Thermal Tripwire Zone if spike exists
-        if (item.zoneBounds) {
-          const zoneRect = L.rectangle(item.zoneBounds, {
-            color: "#f97316",
-            weight: 2,
-            dashArray: "6, 6",
-            fillColor: "#f97316",
-            className: "pulse-zone"
-          }).addTo(eveningLayerGroup);
-
-          zoneRect.bindTooltip(`<b>INSAT-3DS ~4 km Tripwire Zone</b><br>${item.village}<br>${item.insatSpike}`);
-        }
-
-        // 2. Draw 10 m Sentinel-2 Field Polygon
-        const fieldPolygon = L.polygon(item.fieldPoly, {
-          color: "#ffffff",
-          weight: 2,
-          fillColor: item.polyColor,
-          fillOpacity: 0.85
-        }).addTo(eveningLayerGroup);
-
-        fieldPolygon.bindTooltip(`<b>${item.id}: ${item.ruleDecision}</b><br>Click to open Evidence Pack`);
-        fieldPolygon.on('click', () => renderEvidencePack(index));
-      });
-    }
-
-    // Populate Right-Side Evidence Pack Panel
-    function renderEvidencePack(index) {
-      const c = casesData[index];
-      const container = document.getElementById('evidenceContainer');
-
-      container.innerHTML = `
-        <div class="bg-slate-950 border border-slate-800 rounded-xl p-4 space-y-3">
-          <div class="flex justify-between items-start">
-            <div>
-              <span class="text-xs text-slate-400 font-mono">${c.id}</span>
-              <h3 class="text-base font-bold text-white">${c.village}</h3>
-            </div>
-            <span class="text-xs border px-2.5 py-1 rounded font-semibold ${c.badgeColor}">
-              ${c.ruleDecision}
-            </span>
-          </div>
-
-          <!-- TWO SIGNALS BOX -->
-          <div class="grid grid-cols-1 gap-2 pt-2 border-t border-slate-800 text-xs">
-            <div class="bg-slate-900 p-2.5 rounded border border-slate-800">
-              <span class="text-slate-400 block">1. INSAT-3DS Thermal Tripwire (~4 km, 30-min scan):</span>
-              <strong class="text-orange-400">${c.insatSpike}</strong>
-            </div>
-            <div class="bg-slate-900 p-2.5 rounded border border-slate-800">
-              <span class="text-slate-400 block">2. Sentinel-2 Burnt-Field Map (10 m resolution):</span>
-              <strong class="text-sky-400">${c.sentinelScar}</strong>
-            </div>
-          </div>
-
-          <!-- BEFORE / AFTER VISUAL SIMULATION -->
-          <div class="pt-2">
-            <div class="text-xs font-semibold text-slate-300 mb-2">Sentinel-2 Before / After Field Check (10 m):</div>
-            <div class="grid grid-cols-2 gap-2 text-center text-[11px]">
-              <div class="bg-emerald-950/70 border border-emerald-700 rounded p-4 flex flex-col items-center justify-center">
-                <div class="w-12 h-12 bg-emerald-600/80 border border-white rounded mb-1.5"></div>
-                <span class="font-bold text-emerald-300">BEFORE IMAGE</span>
-                <span class="text-slate-400">${c.beforeDate}</span>
-              </div>
-              <div class="bg-slate-900 border border-slate-700 rounded p-4 flex flex-col items-center justify-center">
-                <div class="w-12 h-12 ${c.id === 'AD-2026-02' ? 'bg-emerald-600/80' : c.id === 'AD-2026-04' ? 'bg-slate-400/80 blur-[1px]' : 'bg-neutral-900'} border border-white rounded mb-1.5"></div>
-                <span class="font-bold text-orange-300">AFTER IMAGE</span>
-                <span class="text-slate-400">${c.afterDate}</span>
-              </div>
-            </div>
-          </div>
-
-          <!-- METADATA -->
-          <div class="grid grid-cols-2 gap-2 text-xs bg-slate-900 p-3 rounded border border-slate-800">
-            <div><span class="text-slate-400 block">Estimated Burnt Area:</span><strong class="text-white">${c.burntArea}</strong></div>
-            <div><span class="text-slate-400 block">Confidence Level:</span><strong class="text-white">${c.confidence}</strong></div>
-            <div class="col-span-2"><span class="text-slate-400 block">Verification Status:</span><strong id="caseStatusText" class="text-emerald-400">${c.status}</strong></div>
-          </div>
-
-          <!-- OFFICER HUMAN-IN-THE-LOOP ACTIONS -->
-          <div class="pt-2 space-y-2">
-            <div class="text-[11px] text-slate-400 italic">
-              🛡️ Governance Rule: No automatic penalties. Officer must verify on the field before any action.
-            </div>
-            <div class="flex gap-2">
-              <button onclick="updateCaseStatus(${index}, 'Verified by Officer on Ground')" class="flex-1 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold py-2 px-3 rounded transition">
-                ✅ Confirm After Field Check
-              </button>
-              <button onclick="updateCaseStatus(${index}, 'Marked False Alarm — Closed')" class="flex-1 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold py-2 px-3 rounded transition">
-                ❌ Mark False Alarm
-              </button>
-            </div>
-          </div>
-        </div>
-
-        <!-- CASE LIST SELECTOR -->
-        <div class="pt-2">
-          <div class="text-xs font-semibold text-slate-400 mb-2">All Flagged Cases in District (${casesData.length}):</div>
-          <div class="space-y-1.5">
-            ${casesData.map((item, idx) => `
-              <div onclick="selectCaseFromList(${idx})" class="cursor-pointer p-2 rounded border ${idx === index ? 'bg-slate-800 border-orange-500' : 'bg-slate-950 border-slate-800 hover:bg-slate-900'} flex justify-between items-center text-xs">
-                <span><strong>${item.id}</strong> —${item.village}</span>
-                <span class="text-[10px] px-2 py-0.5 rounded border ${item.badgeColor}">${item.ruleDecision}</span>
-              </div>
-            `).join('')}
-          </div>
-        </div>
-      `;
-    }
-
-    function selectCaseFromList(index) {
-      const c = casesData[index];
-      map.flyTo(c.coords, 14, { duration: 0.8 });
-      renderEvidencePack(index);
-    }
-
-    function updateCaseStatus(index, newStatus) {
-      casesData[index].status = newStatus;
-      renderEvidencePack(index);
-    }
-
-    // Switch between Midday (MODIS/VIIRS) and Evening (INSAT-3DS)
-    function setObservationMode(mode) {
-      const btnMidday = document.getElementById('btnMidday');
-      const btnEvening = document.getElementById('btnEvening');
-      const banner = document.getElementById('modeBanner');
-
-      if (mode === 'midday') {
-        map.removeLayer(eveningLayerGroup);
-        btnMidday.className = "px-3 py-1.5 rounded text-xs font-semibold transition bg-orange-600 text-white shadow";
-        btnEvening.className = "px-3 py-1.5 rounded text-xs font-semibold transition bg-slate-800 text-slate-300 hover:text-white";
-        banner.innerHTML = "⚠️ <strong>Midday Pass (10:30 AM – 1:30 PM | MODIS/VIIRS):</strong> 0 Fires Caught — Satellites look when farmers are not burning!";
-        document.getElementById('statConfirmed').innerText = "0";
-      } else {
-        eveningLayerGroup.addTo(map);
-        btnEvening.className = "px-3 py-1.5 rounded text-xs font-semibold transition bg-orange-600 text-white shadow";
-        btnMidday.className = "px-3 py-1.5 rounded text-xs font-semibold transition bg-slate-800 text-slate-300 hover:text-white";
-        banner.innerHTML = "⚡ <strong>Active Mode:</strong> INSAT-3DS Evening Watch (Every 30 mins) + Sentinel-2 (10 m) Before/After Field Confirmation";
-        document.getElementById('statConfirmed').innerText = "2";
-      }
-    }
-
-    // Switch between Officer Map and Farmer Alert Page
-    function switchPortal(portal) {
-      const officerPortal = document.getElementById('officerPortal');
-      const farmerPortal = document.getElementById('farmerPortal');
-      const tabOfficer = document.getElementById('tabOfficer');
-      const tabFarmer = document.getElementById('tabFarmer');
-
-      if (portal === 'officer') {
-        officerPortal.classList.remove('hidden');
-        farmerPortal.classList.add('hidden');
-        tabOfficer.className = "px-4 py-1.5 rounded-md text-xs font-semibold bg-blue-600 text-white";
-        tabFarmer.className = "px-4 py-1.5 rounded-md text-xs font-semibold bg-slate-800 text-slate-300 hover:bg-slate-700";
-        setTimeout(() => map.invalidateSize(), 100);
-      } else {
-        officerPortal.classList.add('hidden');
-        farmerPortal.classList.remove('hidden');
-        tabFarmer.className = "px-4 py-1.5 rounded-md text-xs font-semibold bg-emerald-600 text-white";
-        tabOfficer.className = "px-4 py-1.5 rounded-md text-xs font-semibold bg-slate-800 text-slate-300 hover:bg-slate-700";
-      }
-    }
-
-    // Initial Load
-    renderMapLayers();
-    renderEvidencePack(0);
-  </script>
+  <!-- Leaflet JS -->
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <!-- Custom Script -->
+  <script src="script.js"></script>
 </body>
 </html>
