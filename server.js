@@ -203,26 +203,32 @@ app.use((req, res) => {
   }
 });
 
-const server = app.listen(PORT, () => {
-  console.log(`AgniDrishti Server running at http://localhost:${PORT}`);
-});
+// Only start listening when not running in a Serverless environment (like Vercel or AWS Lambda)
+if (!process.env.VERCEL && !process.env.AWS_LAMBDA_FUNCTION_NAME) {
+  const server = app.listen(PORT, () => {
+    console.log(`AgniDrishti Server running at http://localhost:${PORT}`);
+  });
 
-// Graceful shutdown handling for container and PaaS platforms
-process.on('SIGTERM', () => {
-  console.log('SIGTERM signal received: closing HTTP server gracefully');
-  server.close(() => {
-    console.log('HTTP server closed');
-    mongoose.connection.close(false).then(() => {
-      console.log('MongoDB connection closed');
+  // Graceful shutdown handling for container and PaaS platforms
+  process.on('SIGTERM', () => {
+    console.log('SIGTERM signal received: closing HTTP server gracefully');
+    server.close(() => {
+      console.log('HTTP server closed');
+      mongoose.connection.close(false).then(() => {
+        console.log('MongoDB connection closed');
+        process.exit(0);
+      });
+    });
+  });
+
+  process.on('SIGINT', () => {
+    console.log('SIGINT signal received: closing HTTP server gracefully');
+    server.close(() => {
+      console.log('HTTP server closed');
       process.exit(0);
     });
   });
-});
+}
 
-process.on('SIGINT', () => {
-  console.log('SIGINT signal received: closing HTTP server gracefully');
-  server.close(() => {
-    console.log('HTTP server closed');
-    process.exit(0);
-  });
-});
+// CRITICAL FOR VERCEL DEPLOYMENT: Export the Express app as a serverless handler
+module.exports = app;
