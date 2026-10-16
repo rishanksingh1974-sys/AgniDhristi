@@ -41,3 +41,141 @@ function toggleSidebar(){sidebarOpen=!sidebarOpen;document.getElementById('offic
 function bookOption(optionName){showToast(`Request sent for: ${optionName}`,'success')}
 
 updateStatusCounters();renderMapLayers();renderEvidencePack(0);
+
+// Stage-1 farmer intervention state. These flows stay usable without an API connection.
+let selectedAcreage = 5;
+const STRAW_PER_ACRE = 22;
+const BIO_CNG_RATE = 180;
+const SOIL_NITROGEN_SAVING_PER_ACRE = 1000;
+const POTENTIAL_NGT_FINE_PER_ACRE = 2500;
+
+function formatRupees(amount) {
+  return `₹${Math.round(amount).toLocaleString('en-IN')}`;
+}
+
+function updatePayoutCalculator(value) {
+  selectedAcreage = Number(value);
+  const straw = selectedAcreage * STRAW_PER_ACRE;
+  const cash = straw * BIO_CNG_RATE;
+  const soilSaving = selectedAcreage * SOIL_NITROGEN_SAVING_PER_ACRE;
+  const fineAvoided = selectedAcreage * POTENTIAL_NGT_FINE_PER_ACRE;
+  document.getElementById('acreageValue').textContent = selectedAcreage;
+  document.getElementById('strawValue').textContent = `${straw.toLocaleString('en-IN')} qtl`;
+  document.getElementById('cashPayoutValue').textContent = formatRupees(cash);
+  document.getElementById('savingsValue').textContent = formatRupees(soilSaving + fineAvoided);
+  document.getElementById('savingsDetail').textContent = `${formatRupees(soilSaving)} soil nutrients + ${formatRupees(fineAvoided)} potential fine avoided`;
+}
+
+function farmerConfirmation(title, content) {
+  document.getElementById('farmerConfirmationModal')?.remove();
+  const modal = document.createElement('div');
+  modal.id = 'farmerConfirmationModal';
+  modal.className = 'farmer-confirmation-modal';
+  modal.innerHTML = `<div class="farmer-confirmation-card" role="dialog" aria-modal="true" aria-label="${title}">
+    <button class="farmer-modal-close" onclick="closeFarmerConfirmation()" aria-label="Close confirmation">×</button>
+    <div class="confirmation-icon">✓</div>
+    <span class="confirmation-label">Stage-1 intervention confirmed</span>
+    <h3>${title}</h3>
+    ${content}
+    <button class="action-btn green-btn" onclick="closeFarmerConfirmation()">Done</button>
+  </div>`;
+  document.body.appendChild(modal);
+  modal.querySelector('.farmer-modal-close').focus();
+}
+
+function closeFarmerConfirmation() {
+  document.getElementById('farmerConfirmationModal')?.remove();
+}
+
+function reserveMachineSlot(centre, timeSlot) {
+  farmerConfirmation('Free machine slot reserved', `<div class="confirmation-details"><div><span>Custom Hiring Centre</span><strong>${centre}</strong></div><div><span>Booking token</span><strong>#CHC-8841</strong></div><div><span>Reserved time slot</span><strong>${timeSlot}</strong></div><div><span>Service fee</span><strong class="confirmation-good">Free reservation</strong></div></div><p>Your CHC will hold this slot while the field team coordinates machine delivery.</p>`);
+  showToast(`${centre}: free machine slot reserved.`, 'success');
+}
+
+function scheduleFarmGatePickup(buyer, rate, timeSlot) {
+  const straw = selectedAcreage * STRAW_PER_ACRE;
+  const payout = straw * rate;
+  farmerConfirmation('Farm-gate pickup scheduled', `<div class="confirmation-details"><div><span>Residue buyer</span><strong>${buyer}</strong></div><div><span>Selected area</span><strong>${selectedAcreage} acres · ${straw} qtl estimated</strong></div><div><span>Confirmed cash payout</span><strong class="confirmation-good">${formatRupees(payout)} @ ₹${rate}/qtl</strong></div><div><span>Pickup window</span><strong>${timeSlot}</strong></div></div><p>Keep the residue accessible at the farm gate. The buyer will confirm the vehicle before arrival.</p>`);
+  showToast(`${buyer}: pickup scheduled for ${formatRupees(payout)}.`, 'success');
+}
+
+// Calculator markup is in the farmer portal; initialize it after the document has loaded.
+updatePayoutCalculator(selectedAcreage);
+
+// Multilingual WhatsApp / IVR preview for the 72-hour, pre-burn intervention.
+let alertLanguage = 'en';
+let alertReply = null;
+const farmerAlertCopy = {
+  en: {
+    status: 'WhatsApp · automated alert',
+    intro: 'Hello, Dirba farmer 👋 Sentinel-2 has detected a harvest NDVI drop on your field (0.62 → 0.18). Your paddy harvest is complete and the next 72 hours are ideal for residue management — before any burn window.',
+    prompt: 'Choose a free, nearby option:',
+    machine: '[1] 🚜 Book Happy Seeder @ Dirba Co-op (2.1 km)',
+    buyer: '[2] 💰 Sell 110 Qtl Straw for ₹19,800 @ Sangrur Bio-CNG',
+    machineConfirm: '✅ Happy Seeder request confirmed with Dirba Co-op (2.1 km). Your free machine-slot card is highlighted below.',
+    buyerConfirm: '✅ Sangrur Bio-CNG pickup interest confirmed for 110 qtl / ₹19,800. Your payout card is highlighted below.'
+  },
+  pa: {
+    status: 'ਵਟਸਐਪ · ਆਟੋਮੈਟਿਕ ਅਲਰਟ',
+    intro: 'ਸਤ ਸ੍ਰੀ ਅਕਾਲ, ਦਿੜਬਾ ਕਿਸਾਨ ਜੀ 👋 ਸੈਂਟੀਨਲ-2 ਨੇ ਤੁਹਾਡੇ ਖੇਤ ਵਿੱਚ ਕਟਾਈ ਤੋਂ ਬਾਅਦ NDVI ਘਟਾਅ (0.62 → 0.18) ਪਾਇਆ ਹੈ। ਅਗਲੇ 72 ਘੰਟੇ ਪਰਾਲੀ ਪ੍ਰਬੰਧਨ ਲਈ ਢੁੱਕਵੇਂ ਹਨ — ਸਾੜਨ ਤੋਂ ਪਹਿਲਾਂ।',
+    prompt: 'ਨੇੜੇ ਦੀ ਮੁਫ਼ਤ ਸਹੂਲਤ ਚੁਣੋ:',
+    machine: '[1] 🚜 ਦਿੜਬਾ ਕੋ-ਆਪ ਤੋਂ ਹੈਪੀ ਸੀਡਰ ਬੁੱਕ ਕਰੋ (2.1 ਕਿ.ਮੀ.)',
+    buyer: '[2] 💰 ਸੰਗਰੂਰ ਬਾਇਓ-CNG ਨੂੰ 110 ਕੁਇੰਟਲ ਪਰਾਲੀ ₹19,800 ਵਿੱਚ ਵੇਚੋ',
+    machineConfirm: '✅ ਦਿੜਬਾ ਕੋ-ਆਪ (2.1 ਕਿ.ਮੀ.) ਕੋਲ ਹੈਪੀ ਸੀਡਰ ਦੀ ਬੇਨਤੀ ਪੱਕੀ ਹੋ ਗਈ ਹੈ। ਹੇਠਾਂ ਮਸ਼ੀਨ ਕਾਰਡ ਹਾਈਲਾਈਟ ਹੈ।',
+    buyerConfirm: '✅ 110 ਕੁਇੰਟਲ / ₹19,800 ਲਈ ਸੰਗਰੂਰ ਬਾਇਓ-CNG ਪਿਕਅੱਪ ਦਿਲਚਸਪੀ ਪੱਕੀ ਹੈ। ਹੇਠਾਂ ਭੁਗਤਾਨ ਕਾਰਡ ਹਾਈਲਾਈਟ ਹੈ।'
+  },
+  hi: {
+    status: 'व्हाट्सऐप · स्वचालित अलर्ट',
+    intro: 'नमस्ते, दिड़बा किसान जी 👋 सेंटिनल-2 ने आपके खेत में कटाई के बाद NDVI गिरावट (0.62 → 0.18) देखी है। अगले 72 घंटे पराली प्रबंधन के लिए उपयुक्त हैं — जलाने से पहले।',
+    prompt: 'पास का निःशुल्क विकल्प चुनें:',
+    machine: '[1] 🚜 दिड़बा को-ऑप से हैप्पी सीडर बुक करें (2.1 किमी)',
+    buyer: '[2] 💰 110 क्विंटल पराली ₹19,800 में संग्रूर बायो-CNG को बेचें',
+    machineConfirm: '✅ दिड़बा को-ऑप (2.1 किमी) के साथ हैप्पी सीडर अनुरोध पक्का हो गया है। नीचे मशीन कार्ड हाइलाइट किया गया है।',
+    buyerConfirm: '✅ 110 क्विंटल / ₹19,800 के लिए संग्रूर बायो-CNG पिकअप रुचि पक्की है। नीचे भुगतान कार्ड हाइलाइट किया गया है।'
+  }
+};
+
+function renderAlertPreview() {
+  const copy = farmerAlertCopy[alertLanguage];
+  const chat = document.getElementById('whatsappChat');
+  if (!chat) return;
+  document.getElementById('whatsappStatus').textContent = copy.status;
+  chat.innerHTML = `<div class="chat-timestamp">Just now · Sentinel-2 harvest alert</div>
+    <div class="chat-bubble incoming">${copy.intro}</div>
+    <div class="chat-bubble incoming">${copy.prompt}</div>
+    <div class="quick-replies">
+      <button class="quick-reply" onclick="chooseAlertReply('machine')">${copy.machine}</button>
+      <button class="quick-reply" onclick="chooseAlertReply('buyer')">${copy.buyer}</button>
+    </div>
+    ${alertReply ? `<div class="chat-bubble outgoing">${alertReply === 'machine' ? copy.machine : copy.buyer}</div><div class="chat-bubble incoming confirmation-bubble">${alertReply === 'machine' ? copy.machineConfirm : copy.buyerConfirm}</div>` : ''}`;
+  if (alertReply) chat.scrollTop = chat.scrollHeight;
+}
+
+function setAlertLanguage(language) {
+  alertLanguage = language;
+  ['en', 'pa', 'hi'].forEach(code => {
+    const button = document.getElementById(`lang-${code}`);
+    const active = code === language;
+    button.classList.toggle('active', active);
+    button.setAttribute('aria-selected', active);
+  });
+  renderAlertPreview();
+}
+
+function highlightFarmerOption(cardId) {
+  const card = document.getElementById(cardId);
+  if (!card) return;
+  document.querySelectorAll('.option-item.alert-match').forEach(item => item.classList.remove('alert-match'));
+  card.classList.add('alert-match');
+  card.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  setTimeout(() => card.classList.remove('alert-match'), 4200);
+}
+
+function chooseAlertReply(reply) {
+  alertReply = reply;
+  renderAlertPreview();
+  highlightFarmerOption(reply === 'machine' ? 'dirbaChcCard' : 'sangrurBuyerCard');
+  showToast(reply === 'machine' ? 'Dirba Happy Seeder request selected.' : 'Sangrur Bio-CNG sale option selected.', 'success');
+}
+
+renderAlertPreview();
