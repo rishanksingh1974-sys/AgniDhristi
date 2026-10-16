@@ -27,20 +27,27 @@
     </div>
 
     <div class="nav-controls">
-      <!-- SATELLITE WINDOW TOGGLE -->
+      <!-- SATELLITE OBSERVATION LAYER TOGGLE -->
       <div class="mode-switch" role="tablist" aria-label="Observation mode">
-        <button id="btnMidday" class="mode-btn" onclick="setObservationMode('midday')" role="tab" aria-selected="false">
-          <span class="mode-icon">☀️</span>
+        <button id="btnFusion" class="mode-btn active" onclick="setObservationMode('fusion')" role="tab" aria-selected="true">
+          <span class="mode-icon">🛰️</span>
           <span class="mode-text">
-            <strong>Midday Pass</strong>
-            <small>~10:30 am – 1:30 pm · MODIS/VIIRS</small>
+            <strong>Combined Fusion</strong>
+            <small>INSAT-3DS grid + Sentinel-2 plots</small>
           </span>
         </button>
-        <button id="btnEvening" class="mode-btn active" onclick="setObservationMode('evening')" role="tab" aria-selected="true">
-          <span class="mode-icon">🌙</span>
+        <button id="btnInsat" class="mode-btn" onclick="setObservationMode('insat')" role="tab" aria-selected="false">
+          <span class="mode-icon">🔥</span>
           <span class="mode-text">
-            <strong>Evening Watch</strong>
-            <small>Every 30 mins · INSAT-3DS</small>
+            <strong>INSAT-3DS Thermal (~4 km)</strong>
+            <small>30-min MIR heat cells · Kelvin labels</small>
+          </span>
+        </button>
+        <button id="btnSentinel" class="mode-btn" onclick="setObservationMode('sentinel')" role="tab" aria-selected="false">
+          <span class="mode-icon">🗺️</span>
+          <span class="mode-text">
+            <strong>Sentinel-2 10m Burn Scar</strong>
+            <small>Khasra plots · dNBR confirmation</small>
           </span>
         </button>
       </div>
@@ -63,10 +70,10 @@
       ⚡ <strong>Active Watch:</strong> INSAT-3DS thermal scans every 30 minutes (~4 km tripwire) + Sentinel-2 (10 m) before/after field check
     </div>
     <div class="status-metrics">
-      <span class="metric-pill metric-confirmed">🔴 Confirmed: <strong id="statConfirmed">2</strong></span>
-      <span class="metric-pill metric-false">🟡 False Alarm: <strong id="statFalseAlarm">1</strong></span>
-      <span class="metric-pill metric-late">🔵 Caught Late: <strong id="statCaughtLate">1</strong></span>
-      <span class="metric-pill metric-haze">☁️ Haze Queue: <strong id="statHaze">1</strong></span>
+      <button id="filter-confirmed" class="metric-pill metric-confirmed" onclick="setStatusFilter('Confirmed')">🔴 Confirmed: <strong id="statConfirmed">2</strong></button>
+      <button id="filter-false" class="metric-pill metric-false" onclick="setStatusFilter('False Alarm')">🟡 False Alarm: <strong id="statFalseAlarm">1</strong></button>
+      <button id="filter-late" class="metric-pill metric-late" onclick="setStatusFilter('Caught Late')">🔵 Caught Late: <strong id="statCaughtLate">1</strong></button>
+      <button id="filter-haze" class="metric-pill metric-haze" onclick="setStatusFilter('Haze Queue')">☁️ Haze Queue: <strong id="statHaze">1</strong></button>
     </div>
   </div>
 
@@ -79,6 +86,10 @@
       <!-- SIDEBAR TOGGLE BUTTON -->
       <button id="sidebarToggle" class="sidebar-toggle" onclick="toggleSidebar()" title="Toggle evidence panel" aria-label="Toggle evidence panel">
         <span id="toggleIcon">◀</span>
+      </button>
+
+      <button id="windPlumeToggle" class="wind-plume-toggle" onclick="toggleWindPlume()" aria-pressed="false">
+        🌬️ Wind &amp; Smoke Plume Vector
       </button>
 
       <!-- MAP LEGEND -->

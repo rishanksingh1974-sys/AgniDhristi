@@ -2,8 +2,11 @@
 const map = L.map('map', { zoomControl: false }).setView([30.12, 75.91], 10);
 L.control.zoom({ position: 'topright' }).addTo(map);
 L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { attribution: 'Tiles &copy; Esri | AgniDrishti (INSAT-3DS + Sentinel-2)' }).addTo(map);
-const eveningLayerGroup = L.layerGroup().addTo(map);
-let activeCaseIndex = 0, sidebarOpen = true;
+const insatLayerGroup = L.layerGroup();
+const sentinelLayerGroup = L.layerGroup();
+const markerLayerGroup = L.layerGroup();
+const windPlumeLayerGroup = L.layerGroup();
+let activeCaseIndex = 0, sidebarOpen = true, activeObservationMode = 'fusion', activeStatusFilter = 'all', windPlumeVisible = false;
 const dispatchedCases = new Set(), smogPenetrationCases = new Set();
 
 // Canonical evidence records: two confirmed, one false alarm, one caught late, one haze queue.
@@ -16,16 +19,49 @@ const casesData = [
 ];
 
 function showToast(message, type='info', duration=3500) { const container=document.getElementById('toastContainer'), toast=document.createElement('div'); toast.className=`toast toast-${type}`; toast.innerHTML=`<span>${type==='success'?'✅':'ℹ️'}</span><span>${message}</span>`; container.appendChild(toast); setTimeout(()=>{toast.classList.add('toast-exit');setTimeout(()=>toast.remove(),300)},duration); }
-function updateStatusCounters(mode='evening') { const counts=mode==='midday'?[0,0,0,0]:[2,1,1,1]; ['statConfirmed','statFalseAlarm','statCaughtLate','statHaze'].forEach((id,i)=>document.getElementById(id).textContent=counts[i]); }
+function updateStatusCounters() {
+  const counts = { Confirmed: 2, 'False Alarm': 1, 'Caught Late': 1, 'Haze Queue': 1 };
+  document.getElementById('statConfirmed').textContent = counts.Confirmed;
+  document.getElementById('statFalseAlarm').textContent = counts['False Alarm'];
+  document.getElementById('statCaughtLate').textContent = counts['Caught Late'];
+  document.getElementById('statHaze').textContent = counts['Haze Queue'];
+}
 
-function renderMapLayers() { eveningLayerGroup.clearLayers(); casesData.forEach((item,index)=>{ if(item.zoneBounds){const rect=L.rectangle(item.zoneBounds,{color:'#f97316',weight:2,dashArray:'6, 6',fillColor:'#f97316',fillOpacity:.15}).addTo(eveningLayerGroup);rect.bindTooltip(`<b>INSAT-3DS ~4 km tripwire</b><br>${item.village}<br>${item.insatSpike}<br><i>Click to inspect evidence</i>`,{className:'custom-tooltip'});rect.on('click',()=>selectCase(index));} const poly=L.polygon(item.fieldPoly,{color:'#fff',weight:2,fillColor:item.polyColor,fillOpacity:.85}).addTo(eveningLayerGroup);poly.bindTooltip(`<b>${item.id}: ${item.ruleDecision}</b><br>Click to view evidence pack`,{className:'custom-tooltip'});poly.on('click',()=>selectCase(index)); }); }
+function isVisibleCase(item) { return activeStatusFilter === 'all' || item.ruleDecision === activeStatusFilter; }
+function kelvinLabel(item) { return item.peakK ? `${item.peakK} K` : '≤330 K'; }
+
+function renderMapLayers() {
+  [insatLayerGroup, sentinelLayerGroup, markerLayerGroup].forEach(group => group.clearLayers());
+  casesData.forEach((item, index) => {
+    if (!isVisibleCase(item)) return;
+    if (item.zoneBounds) {
+      const rect = L.rectangle(item.zoneBounds, { color:'#fb923c', weight:2, dashArray:'7, 6', fillColor:'#f97316', fillOpacity:.18, className:'thermal-cell' }).addTo(insatLayerGroup);
+      rect.bindTooltip(`<b>${kelvinLabel(item)} · INSAT-3DS</b><br>${item.village}<br>${item.insatSpike}`, { className:'thermal-tooltip', permanent:activeObservationMode==='insat', direction:'center', opacity:.94 });
+      rect.on('click', () => selectCase(index));
+    }
+    const poly = L.polygon(item.fieldPoly, { color:'#fff', weight:2, fillColor:item.polyColor, fillOpacity:.86, className:'sentinel-plot' }).addTo(sentinelLayerGroup);
+    poly.bindTooltip(`<b>${item.khasra}</b><br>dNBR ${item.dnbr}<br>${item.ruleDecision}`, { className:'sentinel-tooltip', permanent:activeObservationMode==='sentinel', direction:'center', opacity:.94 });
+    poly.on('click', () => selectCase(index));
+    const marker = L.circleMarker(item.coords, { radius:7, color:'#fff', weight:2, fillColor:item.polyColor, fillOpacity:1, className:'case-marker' }).addTo(markerLayerGroup);
+    marker.bindTooltip(`<b>${item.id}</b><br>${item.village}<br>Click to open evidence`, { className:'custom-tooltip' });
+    marker.on('click', () => selectCase(index));
+  });
+  applyObservationLayers();
+}
+
+function applyObservationLayers() {
+  [insatLayerGroup, sentinelLayerGroup, markerLayerGroup].forEach(group => { if (map.hasLayer(group)) map.removeLayer(group); });
+  if (activeObservationMode === 'fusion') { insatLayerGroup.addTo(map); sentinelLayerGroup.addTo(map); markerLayerGroup.addTo(map); }
+  if (activeObservationMode === 'insat') { insatLayerGroup.addTo(map); markerLayerGroup.addTo(map); }
+  if (activeObservationMode === 'sentinel') { sentinelLayerGroup.addTo(map); markerLayerGroup.addTo(map); }
+}
 
 function thermalReadings(c) { const peakIndex=c.peakTime?Number(c.peakTime.slice(0,2))*2+Number(c.peakTime.slice(3))/30:-1; return Array.from({length:48},(_,i)=>{const daylight=Math.max(0,Math.sin(((i/2-5.5)/13)*Math.PI));let value=286+daylight*20+(i%3-1)*.7;if(peakIndex>=0){const d=Math.abs(i-peakIndex);if(d===0)value=c.peakK;else if(d===1)value+=(c.peakK-value)*.38;else if(d===2)value+=(c.peakK-value)*.12;}return Number(value.toFixed(1));}); }
 function thermalChart(c) { const values=thermalReadings(c), w=356,h=154,p={l:30,r:8,t:14,b:24},min=275,max=360,x=i=>p.l+i*(w-p.l-p.r)/47,y=v=>p.t+(max-v)*(h-p.t-p.b)/(max-min),points=values.map((v,i)=>`${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(' '),viirs=27,peak=c.peakTime?Number(c.peakTime.slice(0,2))*2+Number(c.peakTime.slice(3))/30:-1; const grid=[280,320,360].map(v=>`<line x1="${p.l}" y1="${y(v)}" x2="${w-p.r}" y2="${y(v)}" class="thermal-grid"/><text x="2" y="${y(v)+3}" class="thermal-axis">${v}</text>`).join('');const marker=peak>=0?`<circle cx="${x(peak)}" cy="${y(values[peak])}" r="4" class="thermal-peak"/><text x="${Math.min(x(peak)+6,270)}" y="${Math.max(y(values[peak])-8,13)}" class="thermal-annotation">${c.peakTime} • ${c.peakK} K</text>`:`<text x="156" y="31" class="thermal-annotation thermal-calm">No &gt;330 K tripwire spike</text>`; return `<section class="thermal-panel" aria-label="24 hour INSAT-3DS thermal chart"><div class="evidence-section-head"><span>24-hour INSAT-3DS thermal trace</span><small>3.9 µm MIR · 30 min scans</small></div><svg class="thermal-chart" viewBox="0 0 ${w} ${h}" role="img" aria-label="Thermal trace from 00:00 to 23:30 IST">${grid}<line x1="${x(viirs)}" y1="${p.t}" x2="${x(viirs)}" y2="${h-p.b}" class="viirs-line"/><polyline points="${points}" class="thermal-line"/>${marker}<text x="${x(viirs)-30}" y="${h-5}" class="viirs-label">13:30 VIIRS (missed)</text><text x="${p.l}" y="${h-5}" class="thermal-axis">00:00</text><text x="${w-39}" y="${h-5}" class="thermal-axis">23:30</text></svg><div class="thermal-summary"><span class="viirs-key">Dashed: 13:30 IST VIIRS pass ${c.viirsK} K</span><span>${c.peakTime?`Peak: ${c.peakTime} IST @ ${c.peakK} K`:'Late scar found on next clear Sentinel-2 pass'}</span></div></section>`; }
 
 function splitSlider(c) { const active=smogPenetrationCases.has(c.id), post=c.afterType==='haze'?(active?'SWIR / SAR alternate evidence':'Post-pass optical blocked by smog'):c.afterType==='industrial'?'Post-pass: no crop scar':'Post-pass Sentinel-2 10 m SWIR burn scar'; return `<section class="split-section"><div class="evidence-section-head"><span>Before / after burn-scar comparison</span><small>Drag to compare</small></div><div class="split-comparison ${c.afterType}" id="split-${c.id}" style="--split:50%"><div class="scene scene-before"><span>Pre-pass · Golden Stubble</span><i></i><i></i><i></i></div><div class="scene scene-after"><span>${post}</span><i></i><i></i><i></i></div><div class="split-divider"><b>↔</b></div></div><input class="split-range" aria-label="Adjust before and after comparison" type="range" min="0" max="100" value="50" oninput="setEvidenceSplit('${c.id}',this.value)"><div class="split-meta"><span>${c.khasra} · ${c.acreage}</span><span>dNBR ${c.dnbr}</span><span>NDVI ${c.ndvi}</span></div>${c.afterType==='haze'?`<button class="smog-toggle ${active?'active':''}" onclick="toggleSmogPenetration('${c.id}')">${active?'✓ SWIR 2190 nm / Sentinel-1 SAR Penetration Active':'Activate SWIR 2190nm / Sentinel-1 SAR Smog Penetration'}</button>`:''}</section>`; }
 
-function renderEvidencePack(index) { activeCaseIndex=index; const c=casesData[index], dispatched=dispatchedCases.has(c.id), container=document.getElementById('evidenceContainer'); const list=casesData.map((item,idx)=>`<button class="case-list-item ${idx===index?'active-case':''}" onclick="selectCase(${idx})" aria-label="Select ${item.id}"><span><strong>${item.id}</strong><small>${item.village}</small></span><span class="decision-badge ${item.badgeClass}">${item.stateIcon} ${item.ruleDecision}</span></button>`).join(''); container.innerHTML=`<div class="evidence-card deep-evidence-card"><div class="card-top"><div><span class="case-id">${c.id}</span><h3>${c.village}</h3><p>${c.khasra} · ${c.acreage}</p></div><span class="decision-badge ${c.badgeClass}">${c.stateIcon} ${c.ruleDecision}</span></div><div class="signal-strip"><div><span>INSAT-3DS tripwire</span><strong>${c.insatSpike}</strong></div><div><span>Sentinel-2 plot check</span><strong>${c.sentinelScar}</strong></div></div>${thermalChart(c)}${splitSlider(c)}<div class="verification-strip"><span>🛡️ No automatic penalties</span><strong>${dispatched?'● Nodal officer dispatched':c.status}</strong></div><div class="btn-row evidence-actions"><button class="action-btn green-btn ${dispatched?'dispatched':''}" onclick="toggleDispatch(${index})">${dispatched?'✓ Nodal Officer Dispatched — Recall':'Dispatch Nodal Officer'}</button><button class="action-btn blue-btn" onclick="openDossier(${index})">Export Official Evidence Dossier</button></div></div><div class="case-list-wrap"><div class="case-list-header">Evidence cases · ${casesData.length}</div>${list}</div>`; }
+function renderEvidencePack(index) { activeCaseIndex=index; const c=casesData[index], dispatched=dispatchedCases.has(c.id), container=document.getElementById('evidenceContainer'); const visibleCases=casesData.map((item,idx)=>({item,idx})).filter(({item})=>isVisibleCase(item)); const list=visibleCases.map(({item,idx})=>`<button class="case-list-item ${idx===index?'active-case':''}" onclick="selectCase(${idx})" aria-label="Select ${item.id}"><span><strong>${item.id}</strong><small>${item.village}</small></span><span class="decision-badge ${item.badgeClass}">${item.stateIcon} ${item.ruleDecision}</span></button>`).join(''); container.innerHTML=`<div class="evidence-card deep-evidence-card"><div class="card-top"><div><span class="case-id">${c.id}</span><h3>${c.village}</h3><p>${c.khasra} · ${c.acreage}</p></div><span class="decision-badge ${c.badgeClass}">${c.stateIcon} ${c.ruleDecision}</span></div><div class="signal-strip"><div><span>INSAT-3DS tripwire</span><strong>${c.insatSpike}</strong></div><div><span>Sentinel-2 plot check</span><strong>${c.sentinelScar}</strong></div></div>${thermalChart(c)}${splitSlider(c)}<div class="verification-strip"><span>🛡️ No automatic penalties</span><strong>${dispatched?'● Nodal officer dispatched':c.status}</strong></div><div class="btn-row evidence-actions"><button class="action-btn green-btn ${dispatched?'dispatched':''}" onclick="toggleDispatch(${index})">${dispatched?'✓ Nodal Officer Dispatched — Recall':'Dispatch Nodal Officer'}</button><button class="action-btn blue-btn" onclick="openDossier(${index})">Export Official Evidence Dossier</button></div></div><div class="case-list-wrap"><div class="case-list-header">${activeStatusFilter==='all'?'Evidence cases':'Filtered evidence'} · ${visibleCases.length}</div>${list}</div>`; }
 function setEvidenceSplit(id,value){const split=document.getElementById(`split-${id}`);if(split)split.style.setProperty('--split',`${value}%`)}
 function toggleSmogPenetration(id){smogPenetrationCases.has(id)?smogPenetrationCases.delete(id):smogPenetrationCases.add(id);renderEvidencePack(activeCaseIndex);showToast(smogPenetrationCases.has(id)?'SWIR 2190 nm and Sentinel-1 SAR review activated.':'Alternate smog penetration review paused.','success')}
 function toggleDispatch(index){const c=casesData[index];dispatchedCases.has(c.id)?dispatchedCases.delete(c.id):dispatchedCases.add(c.id);renderEvidencePack(index);showToast(dispatchedCases.has(c.id)?`${c.id}: Nodal officer dispatched with evidence pack.`:`${c.id}: Officer dispatch recalled.`,dispatchedCases.has(c.id)?'success':'info')}
@@ -34,8 +70,57 @@ function qrSvg(id){let seed=[...id].reduce((n,char)=>n+char.charCodeAt(0),0),cel
 function openDossier(index){const c=casesData[index];document.getElementById('dossierModal')?.remove();const modal=document.createElement('div');modal.id='dossierModal';modal.className='dossier-modal';modal.innerHTML=`<div class="dossier-sheet" role="dialog" aria-modal="true" aria-label="Official evidence dossier"><button class="modal-close no-print" onclick="closeDossier()" aria-label="Close dossier">×</button><header><div><p>AGNI DRISHTI · OFFICER EVIDENCE DOSSIER</p><h2>${c.id}</h2><span>${c.ruleDecision} evidence — human verification required</span></div>${qrSvg(c.id)}</header><section><h3>Plot identification</h3><dl><div><dt>Location</dt><dd>${c.village}</dd></div><div><dt>Khasra / grid</dt><dd>${c.khasra}</dd></div><div><dt>Area</dt><dd>${c.acreage}</dd></div><div><dt>Coordinates</dt><dd>${c.coords[0]}, ${c.coords[1]}</dd></div></dl></section><section><h3>Satellite pass metadata</h3><dl><div><dt>INSAT-3DS</dt><dd>${c.insatSpike}</dd></div><div><dt>VIIRS pass</dt><dd>13:30 IST · ${c.viirsK} K · missed late event</dd></div><div><dt>Sentinel-2 10 m</dt><dd>${c.sentinelScar}</dd></div><div><dt>Change indicators</dt><dd>dNBR ${c.dnbr} · NDVI ${c.ndvi}</dd></div></dl></section><aside class="dossier-note">Verification QR: ${c.id}-INSAT3DS-S2 · This dossier supports field verification and does not authorize an automatic penalty.</aside><footer><span>Generated local evidence prototype · 30-min thermal fusion</span><button class="action-btn green-btn no-print" onclick="window.print()">Print dossier</button></footer></div>`;document.body.appendChild(modal);modal.querySelector('.modal-close').focus()}
 function closeDossier(){document.getElementById('dossierModal')?.remove()}
 
-function selectCase(index){activeCaseIndex=index;map.flyTo(casesData[index].coords,13,{duration:.7});renderEvidencePack(index)}
-function setObservationMode(mode){const midday=mode==='midday';document.getElementById('btnMidday').classList.toggle('active',midday);document.getElementById('btnEvening').classList.toggle('active',!midday);document.getElementById('btnMidday').setAttribute('aria-selected',midday);document.getElementById('btnEvening').setAttribute('aria-selected',!midday);document.getElementById('modeBanner').innerHTML=midday?'⚠️ <strong>Midday Pass (VIIRS):</strong> 13:30 IST snapshot misses most late-afternoon burns.':'⚡ <strong>Active Watch:</strong> INSAT-3DS thermal scans every 30 minutes + Sentinel-2 10 m field check';midday?map.removeLayer(eveningLayerGroup):eveningLayerGroup.addTo(map);updateStatusCounters(mode)}
+function selectCase(index){
+  activeCaseIndex=index;
+  if (!isVisibleCase(casesData[index])) activeStatusFilter='all';
+  updateStatusFilterButtons();
+  renderMapLayers();
+  map.flyTo(casesData[index].coords,13,{duration:.7});
+  renderEvidencePack(index);
+}
+
+function setObservationMode(mode){
+  activeObservationMode=mode;
+  const modeMeta={
+    fusion:'🛰️ <strong>Combined Fusion:</strong> INSAT-3DS ~4 km thermal tripwire cells + Sentinel-2 10 m Khasra plots.',
+    insat:'🔥 <strong>INSAT-3DS Thermal (~4 km):</strong> Pulsing 30-minute MIR heat cells with Kelvin labels.',
+    sentinel:'🗺️ <strong>Sentinel-2 10m Burn Scar:</strong> High-resolution Khasra polygons and dNBR evidence.'
+  };
+  ['fusion','insat','sentinel'].forEach(key=>{const button=document.getElementById(`btn${key[0].toUpperCase()}${key.slice(1)}`);const active=key===mode;button.classList.toggle('active',active);button.setAttribute('aria-selected',active);});
+  document.getElementById('modeBanner').innerHTML=modeMeta[mode];
+  renderMapLayers();
+}
+
+function updateStatusFilterButtons(){
+  const ids={Confirmed:'filter-confirmed','False Alarm':'filter-false','Caught Late':'filter-late','Haze Queue':'filter-haze'};
+  Object.entries(ids).forEach(([status,id])=>document.getElementById(id).classList.toggle('active-filter',activeStatusFilter===status));
+}
+
+function setStatusFilter(status){
+  activeStatusFilter=activeStatusFilter===status?'all':status;
+  const firstMatch=casesData.findIndex(item=>isVisibleCase(item));
+  if(firstMatch>=0) activeCaseIndex=firstMatch;
+  updateStatusFilterButtons();
+  renderMapLayers();
+  renderEvidencePack(activeCaseIndex);
+  showToast(activeStatusFilter==='all'?'Showing all evidence cases.':`Filtering map and evidence pack: ${activeStatusFilter}.`,'info');
+}
+
+function toggleWindPlume(){
+  windPlumeVisible=!windPlumeVisible;
+  const toggle=document.getElementById('windPlumeToggle');
+  toggle.classList.toggle('active',windPlumeVisible);
+  toggle.setAttribute('aria-pressed',windPlumeVisible);
+  if(windPlumeVisible){
+    windPlumeLayerGroup.clearLayers();
+    const route=[[30.0682,75.9864],[30.16,76.12],[30.30,76.34],[30.44,76.60]];
+    L.polyline(route,{color:'#cbd5e1',weight:3,dashArray:'9,8',className:'wind-plume-path'}).addTo(windPlumeLayerGroup);
+    L.marker(route[2],{interactive:false,icon:L.divIcon({className:'wind-arrow-icon',html:'➜',iconSize:[28,28],iconAnchor:[14,14]})}).addTo(windPlumeLayerGroup);
+    L.marker(route[0],{interactive:false,icon:L.divIcon({className:'wind-plume-label',html:'🌬️ <strong>NW Wind 14 km/h</strong><br>→ Plume trajectory toward Patiala / NCR',iconSize:[220,48],iconAnchor:[10,45]})}).addTo(windPlumeLayerGroup);
+    windPlumeLayerGroup.addTo(map);
+    showToast('Wind & smoke plume vector enabled.','info');
+  } else { map.removeLayer(windPlumeLayerGroup); }
+}
 function switchPortal(portal){const officer=portal==='officer';document.getElementById('officerPortal').classList.toggle('hidden',!officer);document.getElementById('farmerPortal').classList.toggle('hidden',officer);document.getElementById('tabOfficer').classList.toggle('active-tab',officer);document.getElementById('tabFarmer').classList.toggle('active-tab',!officer);document.getElementById('tabOfficer').setAttribute('aria-selected',officer);document.getElementById('tabFarmer').setAttribute('aria-selected',!officer);if(officer)setTimeout(()=>map.invalidateSize(),100)}
 function toggleSidebar(){sidebarOpen=!sidebarOpen;document.getElementById('officerPortal').classList.toggle('sidebar-collapsed',!sidebarOpen);document.getElementById('toggleIcon').textContent=sidebarOpen?'◀':'▶';setTimeout(()=>map.invalidateSize(),300)}
 function bookOption(optionName){showToast(`Request sent for: ${optionName}`,'success')}
