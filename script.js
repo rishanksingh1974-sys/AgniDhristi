@@ -1,445 +1,266 @@
-// =============================================
-// AgniDrishti – Enhanced Frontend Script
-// Tech: Vanilla JavaScript + Leaflet.js
-// =============================================
-
-// Initialize Leaflet Map centered on Sangrur, Punjab
-const map = L.map('map', {
-  zoomControl: false
-}).setView([30.245, 75.845], 12);
-
-// Place zoom controls top-right
+// AgniDrishti officer map: self-contained evidence prototypes (Vanilla JS + Leaflet)
+const map = L.map('map', { zoomControl: false }).setView([30.12, 75.91], 10);
 L.control.zoom({ position: 'topright' }).addTo(map);
+L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { attribution: 'Tiles &copy; Esri | AgniDrishti (INSAT-3DS + Sentinel-2)' }).addTo(map);
+const insatLayerGroup = L.layerGroup();
+const sentinelLayerGroup = L.layerGroup();
+const markerLayerGroup = L.layerGroup();
+const windPlumeLayerGroup = L.layerGroup();
+let activeCaseIndex = 0, sidebarOpen = true, activeObservationMode = 'fusion', activeStatusFilter = 'all', windPlumeVisible = false;
+const dispatchedCases = new Set(), smogPenetrationCases = new Set();
 
-// Add Satellite Base Map Layer
-L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
-  attribution: 'Tiles &copy; Esri | AgniDrishti (INSAT-3DS + Sentinel-2)'
-}).addTo(map);
-
-const eveningLayerGroup = L.layerGroup().addTo(map);
-let activeCaseIndex = 0;
-let sidebarOpen = true;
-
-// Default Fallback Cases covering all Two-Signal Rules and Limits
-let casesData = [
-  {
-    id: "AD-2026-01",
-    village: "Dirba Block, Sangrur",
-    coords: [30.255, 75.830],
-    zoneBounds: [[30.240, 75.810], [30.270, 75.850]], // ~4 km INSAT-3DS tripwire
-    fieldPoly: [[30.253, 75.828], [30.253, 75.833], [30.257, 75.833], [30.257, 75.828]], // 10 m Sentinel-2
-    insatSpike: "Heat spike at 17:30 IST (INSAT-3DS 30-min scan)",
-    sentinelScar: "Scar detected on 10 m before/after field photo",
-    ruleDecision: "Confirmed burning",
-    badgeClass: "badge-confirmed",
-    polyColor: "#dc2626",
-    afterPatchClass: "patch-burnt",
-    burntArea: "2.8 Acres",
-    confidence: "89% (Heat spike + burn scar agree)",
-    confidenceValue: 89,
-    status: "Pending Officer Field Check",
-    beforeLabel: "Before: Unburnt Field (10 m)",
-    afterLabel: "After: Burnt Field Scar (10 m)"
-  },
-  {
-    id: "AD-2026-02",
-    village: "Sunam East, Sangrur",
-    coords: [30.225, 75.875],
-    zoneBounds: [[30.210, 75.855], [30.240, 75.895]],
-    fieldPoly: [[30.223, 75.873], [30.223, 75.878], [30.227, 75.878], [30.227, 75.873]],
-    insatSpike: "Heat spike at 18:00 IST (INSAT-3DS 30-min scan)",
-    sentinelScar: "No scar on 10 m before/after photo",
-    ruleDecision: "Likely false alarm: re-check",
-    badgeClass: "badge-false",
-    polyColor: "#eab308",
-    afterPatchClass: "patch-green",
-    burntArea: "0.0 Acres",
-    confidence: "24% (Mismatch: re-checked, not punished)",
-    confidenceValue: 24,
-    status: "Marked for Re-check (No Penalty)",
-    beforeLabel: "Before: Normal Field (10 m)",
-    afterLabel: "After: No Burn Scar Found"
-  },
-  {
-    id: "AD-2026-03",
-    village: "Lehra North, Sangrur",
-    coords: [30.268, 75.885],
-    zoneBounds: null,
-    fieldPoly: [[30.266, 75.882], [30.266, 75.887], [30.270, 75.887], [30.270, 75.882]],
-    insatSpike: "No spike recorded on ~4 km tripwire",
-    sentinelScar: "Scar detected on 10 m before/after photo",
-    ruleDecision: "Missed by the tripwire, caught late",
-    badgeClass: "badge-late",
-    polyColor: "#0ea5e9",
-    afterPatchClass: "patch-burnt",
-    burntArea: "1.4 Acres",
-    confidence: "75% (CEEW burn-scar accuracy benchmark)",
-    confidenceValue: 75,
-    status: "Pending Officer Field Check",
-    beforeLabel: "Before: Harvested Field (10 m)",
-    afterLabel: "After: Burnt Field Scar (10 m)"
-  },
-  {
-    id: "AD-2026-04",
-    village: "Dhuri South, Sangrur",
-    coords: [30.215, 75.815],
-    zoneBounds: [[30.200, 75.795], [30.230, 75.835]],
-    fieldPoly: [[30.213, 75.812], [30.213, 75.818], [30.217, 75.818], [30.217, 75.812]],
-    insatSpike: "Heat spike at 19:00 IST (INSAT-3DS 30-min scan)",
-    sentinelScar: "Haze or cloud blocked optical imagery",
-    ruleDecision: "Re-check next clear pass",
-    badgeClass: "badge-haze",
-    polyColor: "#a855f7",
-    afterPatchClass: "patch-haze",
-    burntArea: "Pending Clear Pass",
-    confidence: "Queued (Never silently dropped)",
-    confidenceValue: 0,
-    status: "Marked 're-check next clear pass'",
-    beforeLabel: "Before: Clear Field Photo",
-    afterLabel: "After: Blocked by Haze/Cloud"
-  }
+// Canonical evidence records: two confirmed, one false alarm, one caught late, one haze queue.
+const casesData = [
+  { id:'CASE-SGR-101', village:'Dirba Block, Sangrur', khasra:'Khasra #142//8', acreage:'3.2 Acres', coords:[30.0682,75.9864], zoneBounds:[[30.0502,75.9624],[30.0862,76.0104]], fieldPoly:[[30.0658,75.9835],[30.0658,75.9892],[30.0705,75.9892],[30.0705,75.9835]], ruleDecision:'Confirmed', badgeClass:'badge-confirmed', polyColor:'#dc2626', stateIcon:'🔴', peakTime:'16:30', peakK:348.4, viirsK:303.1, dnbr:'+0.49', ndvi:'0.58 → 0.11', insatSpike:'16:30 IST • 348.4 K heat spike', sentinelScar:'10 m SWIR burn scar confirmed (dNBR +0.49)', status:'Evidence ready for field verification', confidence:'High fusion agreement', afterType:'burnt' },
+  { id:'CASE-SUN-102', village:'Sunam East, Sangrur', khasra:'Khasra #89//14', acreage:'4.5 Acres', coords:[30.1285,75.8012], zoneBounds:[[30.1105,75.7772],[30.1465,75.8252]], fieldPoly:[[30.1261,75.7983],[30.1261,75.8040],[30.1308,75.8040],[30.1308,75.7983]], ruleDecision:'Confirmed', badgeClass:'badge-confirmed', polyColor:'#dc2626', stateIcon:'🔴', peakTime:'17:00', peakK:352.0, viirsK:304.0, dnbr:'+0.54', ndvi:'0.61 → 0.09', insatSpike:'17:00 IST • 352.0 K heat spike', sentinelScar:'10 m SWIR burn scar confirmed (dNBR +0.54)', status:'Evidence ready for field verification', confidence:'High fusion agreement', afterType:'burnt' },
+  { id:'CASE-BNL-103', village:'Handiaya Industrial Belt, Barnala', khasra:'Grid #B-19', acreage:'Industrial grid', coords:[30.3410,75.5480], zoneBounds:[[30.3230,75.5240],[30.3590,75.5720]], fieldPoly:[[30.3386,75.5451],[30.3386,75.5508],[30.3433,75.5508],[30.3433,75.5451]], ruleDecision:'False Alarm', badgeClass:'badge-false', polyColor:'#eab308', stateIcon:'🟡', peakTime:'15:00', peakK:339.2, viirsK:301.8, dnbr:'+0.02', ndvi:'0.44 → 0.43', insatSpike:'15:00 IST • 339.2 K thermal source', sentinelScar:'No crop burn scar — brick kiln signature (dNBR +0.02)', status:'Auto-cleared from farmer enforcement queue', confidence:'Thermal / optical mismatch', afterType:'industrial' },
+  { id:'CASE-PTL-104', village:'Nabha Rural, Patiala', khasra:'Khasra #211//3', acreage:'2.1 Acres', coords:[30.3752,76.1520], zoneBounds:null, fieldPoly:[[30.3728,76.1491],[30.3728,76.1548],[30.3775,76.1548],[30.3775,76.1491]], ruleDecision:'Caught Late', badgeClass:'badge-late', polyColor:'#0ea5e9', stateIcon:'🔵', peakTime:null, peakK:null, viirsK:302.6, dnbr:'+0.41', ndvi:'0.56 → 0.14', insatSpike:'No INSAT-3DS spike above 330 K', sentinelScar:'Next clear pass found 10 m ash scar (dNBR +0.41)', status:'Post-pass evidence awaiting field verification', confidence:'Sentinel-2 scar evidence', afterType:'burnt' },
+  { id:'CASE-SGR-105', village:'Moonak Border, Sangrur', khasra:'Sector #M-07', acreage:'Plot geometry pending clear view', coords:[29.8240,75.8910], zoneBounds:[[29.8060,75.8670],[29.8420,75.9150]], fieldPoly:[[29.8216,75.8881],[29.8216,75.8938],[29.8263,75.8938],[29.8263,75.8881]], ruleDecision:'Haze Queue', badgeClass:'badge-haze', polyColor:'#a855f7', stateIcon:'☁️', peakTime:'18:00', peakK:344.8, viirsK:302.3, dnbr:'Pending optical clearance', ndvi:'Optical view blocked', insatSpike:'18:00 IST • 344.8 K heat spike', sentinelScar:'RGB blocked: 78% smog • AOD 1.92', status:'Haze queue — no action until alternate evidence is reviewed', confidence:'SWIR / SAR review required', afterType:'haze' }
 ];
 
-// =============================================
-// TOAST NOTIFICATION SYSTEM
-// =============================================
-function showToast(message, type = 'info', duration = 3500) {
-  const container = document.getElementById('toastContainer');
-  const toast = document.createElement('div');
-  toast.className = `toast toast-${type}`;
-  
-  const icon = type === 'success' ? '✅' : 'ℹ️';
-  toast.innerHTML = `<span>${icon}</span><span>${message}</span>`;
-  container.appendChild(toast);
-
-  setTimeout(() => {
-    toast.classList.add('toast-exit');
-    setTimeout(() => toast.remove(), 300);
-  }, duration);
+function showToast(message, type='info', duration=3500) { const container=document.getElementById('toastContainer'), toast=document.createElement('div'); toast.className=`toast toast-${type}`; toast.innerHTML=`<span>${type==='success'?'✅':'ℹ️'}</span><span>${message}</span>`; container.appendChild(toast); setTimeout(()=>{toast.classList.add('toast-exit');setTimeout(()=>toast.remove(),300)},duration); }
+function updateStatusCounters() {
+  const counts = { Confirmed: 2, 'False Alarm': 1, 'Caught Late': 1, 'Haze Queue': 1 };
+  document.getElementById('statConfirmed').textContent = counts.Confirmed;
+  document.getElementById('statFalseAlarm').textContent = counts['False Alarm'];
+  document.getElementById('statCaughtLate').textContent = counts['Caught Late'];
+  document.getElementById('statHaze').textContent = counts['Haze Queue'];
 }
 
-// =============================================
-// STATUS COUNTERS
-// =============================================
-function updateStatusCounters(mode = 'evening') {
-  if (mode === 'midday') {
-    document.getElementById('statConfirmed').innerText = "0";
-    document.getElementById('statFalseAlarm').innerText = "0";
-    document.getElementById('statCaughtLate').innerText = "0";
-    document.getElementById('statHaze').innerText = "0";
-    return;
-  }
+function isVisibleCase(item) { return activeStatusFilter === 'all' || item.ruleDecision === activeStatusFilter; }
+function kelvinLabel(item) { return item.peakK ? `${item.peakK} K` : '≤330 K'; }
 
-  const confirmedCount = casesData.filter(c => c.ruleDecision === "Confirmed burning").length;
-  const falseAlarmCount = casesData.filter(c => c.ruleDecision === "Likely false alarm: re-check").length;
-  const caughtLateCount = casesData.filter(c => c.ruleDecision === "Missed by the tripwire, caught late").length;
-  const hazeCount = casesData.filter(c => c.ruleDecision === "Re-check next clear pass").length;
-
-  document.getElementById('statConfirmed').innerText = String(confirmedCount);
-  document.getElementById('statFalseAlarm').innerText = String(falseAlarmCount);
-  document.getElementById('statCaughtLate').innerText = String(caughtLateCount);
-  document.getElementById('statHaze').innerText = String(hazeCount);
-}
-
-// =============================================
-// FETCH CASES FROM BACKEND
-// =============================================
-async function loadCases() {
-  try {
-    const res = await fetch('/api/cases');
-    if (res.ok) {
-      const data = await res.json();
-      // Ensure confidenceValue exists for each case
-      casesData = data.map(c => ({
-        ...c,
-        confidenceValue: c.confidenceValue || parseConfidenceValue(c.confidence)
-      }));
-    }
-  } catch (err) {
-    // Runs seamlessly with local casesData if opened directly as index.html
-  }
-  updateStatusCounters('evening');
-  renderMapLayers();
-  renderEvidencePack(0);
-}
-
-// Extract numeric confidence from string like "89% (Heat spike + burn scar agree)"
-function parseConfidenceValue(str) {
-  if (!str) return 0;
-  const match = str.match(/(\d+)%/);
-  return match ? parseInt(match[1], 10) : 0;
-}
-
-// =============================================
-// MAP RENDERING
-// =============================================
 function renderMapLayers() {
-  eveningLayerGroup.clearLayers();
-
+  [insatLayerGroup, sentinelLayerGroup, markerLayerGroup].forEach(group => group.clearLayers());
   casesData.forEach((item, index) => {
-    // Safe check so an empty array [] from MongoDB never crashes Leaflet
-    if (Array.isArray(item.zoneBounds) && item.zoneBounds.length === 2) {
-      const rect = L.rectangle(item.zoneBounds, {
-        color: "#f97316",
-        weight: 2,
-        dashArray: "6, 6",
-        fillColor: "#f97316",
-        fillOpacity: 0.15
-      }).addTo(eveningLayerGroup);
-
-      rect.bindTooltip(
-        `<b>INSAT-3DS ~4 km Tripwire Zone</b><br>${item.village}<br>${item.insatSpike}<br><i>Click to zoom & inspect</i>`,
-        { className: 'custom-tooltip' }
-      );
+    if (!isVisibleCase(item)) return;
+    if (item.zoneBounds) {
+      const rect = L.rectangle(item.zoneBounds, { color:'#fb923c', weight:2, dashArray:'7, 6', fillColor:'#f97316', fillOpacity:.18, className:'thermal-cell' }).addTo(insatLayerGroup);
+      rect.bindTooltip(`<b>${kelvinLabel(item)} · INSAT-3DS</b><br>${item.village}<br>${item.insatSpike}`, { className:'thermal-tooltip', permanent:activeObservationMode==='insat', direction:'center', opacity:.94 });
       rect.on('click', () => selectCase(index));
     }
-
-    if (Array.isArray(item.fieldPoly) && item.fieldPoly.length >= 3) {
-      const poly = L.polygon(item.fieldPoly, {
-        color: "#ffffff",
-        weight: 2,
-        fillColor: item.polyColor,
-        fillOpacity: 0.85
-      }).addTo(eveningLayerGroup);
-
-      poly.bindTooltip(
-        `<b>${item.id}: ${item.ruleDecision}</b><br>Click to view Evidence Pack`,
-        { className: 'custom-tooltip' }
-      );
-      poly.on('click', () => selectCase(index));
-    }
+    const poly = L.polygon(item.fieldPoly, { color:'#fff', weight:2, fillColor:item.polyColor, fillOpacity:.86, className:'sentinel-plot' }).addTo(sentinelLayerGroup);
+    poly.bindTooltip(`<b>${item.khasra}</b><br>dNBR ${item.dnbr}<br>${item.ruleDecision}`, { className:'sentinel-tooltip', permanent:activeObservationMode==='sentinel', direction:'center', opacity:.94 });
+    poly.on('click', () => selectCase(index));
+    const marker = L.circleMarker(item.coords, { radius:7, color:'#fff', weight:2, fillColor:item.polyColor, fillOpacity:1, className:'case-marker' }).addTo(markerLayerGroup);
+    marker.bindTooltip(`<b>${item.id}</b><br>${item.village}<br>Click to open evidence`, { className:'custom-tooltip' });
+    marker.on('click', () => selectCase(index));
   });
+  applyObservationLayers();
 }
 
-// =============================================
-// CONFIDENCE BAR HELPER
-// =============================================
-function getConfidenceBarHTML(value, decision) {
-  if (value === 0 && decision === "Re-check next clear pass") {
-    return `
-      <div class="confidence-bar-container">
-        <div class="confidence-bar-bg">
-          <div class="confidence-bar-fill confidence-queued" style="width: 100%; opacity: 0.4;"></div>
-        </div>
-      </div>`;
-  }
-
-  let colorClass = 'confidence-low';
-  if (value >= 75) colorClass = 'confidence-high';
-  else if (value >= 40) colorClass = 'confidence-medium';
-
-  return `
-    <div class="confidence-bar-container">
-      <div class="confidence-bar-bg">
-        <div class="confidence-bar-fill ${colorClass}" style="width: ${value}%;"></div>
-      </div>
-    </div>`;
+function applyObservationLayers() {
+  [insatLayerGroup, sentinelLayerGroup, markerLayerGroup].forEach(group => { if (map.hasLayer(group)) map.removeLayer(group); });
+  if (activeObservationMode === 'fusion') { insatLayerGroup.addTo(map); sentinelLayerGroup.addTo(map); markerLayerGroup.addTo(map); }
+  if (activeObservationMode === 'insat') { insatLayerGroup.addTo(map); markerLayerGroup.addTo(map); }
+  if (activeObservationMode === 'sentinel') { sentinelLayerGroup.addTo(map); markerLayerGroup.addTo(map); }
 }
 
-// =============================================
-// EVIDENCE PACK PANEL RENDERING
-// =============================================
-function renderEvidencePack(index) {
-  activeCaseIndex = index;
-  const c = casesData[index];
-  const container = document.getElementById('evidenceContainer');
+function thermalReadings(c) { const peakIndex=c.peakTime?Number(c.peakTime.slice(0,2))*2+Number(c.peakTime.slice(3))/30:-1; return Array.from({length:48},(_,i)=>{const daylight=Math.max(0,Math.sin(((i/2-5.5)/13)*Math.PI));let value=286+daylight*20+(i%3-1)*.7;if(peakIndex>=0){const d=Math.abs(i-peakIndex);if(d===0)value=c.peakK;else if(d===1)value+=(c.peakK-value)*.38;else if(d===2)value+=(c.peakK-value)*.12;}return Number(value.toFixed(1));}); }
+function thermalChart(c) { const values=thermalReadings(c), w=356,h=154,p={l:30,r:8,t:14,b:24},min=275,max=360,x=i=>p.l+i*(w-p.l-p.r)/47,y=v=>p.t+(max-v)*(h-p.t-p.b)/(max-min),points=values.map((v,i)=>`${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(' '),viirs=27,peak=c.peakTime?Number(c.peakTime.slice(0,2))*2+Number(c.peakTime.slice(3))/30:-1; const grid=[280,320,360].map(v=>`<line x1="${p.l}" y1="${y(v)}" x2="${w-p.r}" y2="${y(v)}" class="thermal-grid"/><text x="2" y="${y(v)+3}" class="thermal-axis">${v}</text>`).join('');const marker=peak>=0?`<circle cx="${x(peak)}" cy="${y(values[peak])}" r="4" class="thermal-peak"/><text x="${Math.min(x(peak)+6,270)}" y="${Math.max(y(values[peak])-8,13)}" class="thermal-annotation">${c.peakTime} • ${c.peakK} K</text>`:`<text x="156" y="31" class="thermal-annotation thermal-calm">No &gt;330 K tripwire spike</text>`; return `<section class="thermal-panel" aria-label="24 hour INSAT-3DS thermal chart"><div class="evidence-section-head"><span>24-hour INSAT-3DS thermal trace</span><small>3.9 µm MIR · 30 min scans</small></div><svg class="thermal-chart" viewBox="0 0 ${w} ${h}" role="img" aria-label="Thermal trace from 00:00 to 23:30 IST">${grid}<line x1="${x(viirs)}" y1="${p.t}" x2="${x(viirs)}" y2="${h-p.b}" class="viirs-line"/><polyline points="${points}" class="thermal-line"/>${marker}<text x="${x(viirs)-30}" y="${h-5}" class="viirs-label">13:30 VIIRS (missed)</text><text x="${p.l}" y="${h-5}" class="thermal-axis">00:00</text><text x="${w-39}" y="${h-5}" class="thermal-axis">23:30</text></svg><div class="thermal-summary"><span class="viirs-key">Dashed: 13:30 IST VIIRS pass ${c.viirsK} K</span><span>${c.peakTime?`Peak: ${c.peakTime} IST @ ${c.peakK} K`:'Late scar found on next clear Sentinel-2 pass'}</span></div></section>`; }
 
-  const listHtml = casesData.map((item, idx) => `
-    <div class="case-list-item ${idx === index ? 'active-case' : ''}"
-         onclick="selectCase(${idx})"
-         tabindex="0"
-         role="button"
-         aria-label="Select case ${item.id}"
-         onkeydown="if(event.key==='Enter')selectCase(${idx})">
-      <span><strong>${item.id}</strong> — ${item.village}</span>
-      <span class="decision-badge ${item.badgeClass}">${item.ruleDecision}</span>
-    </div>
-  `).join('');
+function splitSlider(c) { const active=smogPenetrationCases.has(c.id), post=c.afterType==='haze'?(active?'SWIR / SAR alternate evidence':'Post-pass optical blocked by smog'):c.afterType==='industrial'?'Post-pass: no crop scar':'Post-pass Sentinel-2 10 m SWIR burn scar'; return `<section class="split-section"><div class="evidence-section-head"><span>Before / after burn-scar comparison</span><small>Drag to compare</small></div><div class="split-comparison ${c.afterType}" id="split-${c.id}" style="--split:50%"><div class="scene scene-before"><span>Pre-pass · Golden Stubble</span><i></i><i></i><i></i></div><div class="scene scene-after"><span>${post}</span><i></i><i></i><i></i></div><div class="split-divider"><b>↔</b></div></div><input class="split-range" aria-label="Adjust before and after comparison" type="range" min="0" max="100" value="50" oninput="setEvidenceSplit('${c.id}',this.value)"><div class="split-meta"><span>${c.khasra} · ${c.acreage}</span><span>dNBR ${c.dnbr}</span><span>NDVI ${c.ndvi}</span></div>${c.afterType==='haze'?`<button class="smog-toggle ${active?'active':''}" onclick="toggleSmogPenetration('${c.id}')">${active?'✓ SWIR 2190 nm / Sentinel-1 SAR Penetration Active':'Activate SWIR 2190nm / Sentinel-1 SAR Smog Penetration'}</button>`:''}</section>`; }
 
-  container.innerHTML = `
-    <div class="evidence-card">
-      <div class="card-top">
-        <div>
-          <span class="case-id">${c.id}</span>
-          <h3>${c.village}</h3>
-        </div>
-        <span class="decision-badge ${c.badgeClass}">${c.ruleDecision}</span>
-      </div>
+function renderEvidencePack(index) { activeCaseIndex=index; const c=casesData[index], dispatched=dispatchedCases.has(c.id), container=document.getElementById('evidenceContainer'); const visibleCases=casesData.map((item,idx)=>({item,idx})).filter(({item})=>isVisibleCase(item)); const list=visibleCases.map(({item,idx})=>`<button class="case-list-item ${idx===index?'active-case':''}" onclick="selectCase(${idx})" aria-label="Select ${item.id}"><span><strong>${item.id}</strong><small>${item.village}</small></span><span class="decision-badge ${item.badgeClass}">${item.stateIcon} ${item.ruleDecision}</span></button>`).join(''); container.innerHTML=`<div class="evidence-card deep-evidence-card"><div class="card-top"><div><span class="case-id">${c.id}</span><h3>${c.village}</h3><p>${c.khasra} · ${c.acreage}</p></div><span class="decision-badge ${c.badgeClass}">${c.stateIcon} ${c.ruleDecision}</span></div><div class="signal-strip"><div><span>INSAT-3DS tripwire</span><strong>${c.insatSpike}</strong></div><div><span>Sentinel-2 plot check</span><strong>${c.sentinelScar}</strong></div></div>${thermalChart(c)}${splitSlider(c)}<div class="verification-strip"><span>🛡️ No automatic penalties</span><strong>${dispatched?'● Nodal officer dispatched':c.status}</strong></div><div class="btn-row evidence-actions"><button class="action-btn green-btn ${dispatched?'dispatched':''}" onclick="toggleDispatch(${index})">${dispatched?'✓ Nodal Officer Dispatched — Recall':'Dispatch Nodal Officer'}</button><button class="action-btn blue-btn" onclick="openDossier(${index})">Export Official Evidence Dossier</button></div></div><div class="case-list-wrap"><div class="case-list-header">${activeStatusFilter==='all'?'Evidence cases':'Filtered evidence'} · ${visibleCases.length}</div>${list}</div>`; }
+function setEvidenceSplit(id,value){const split=document.getElementById(`split-${id}`);if(split)split.style.setProperty('--split',`${value}%`)}
+function toggleSmogPenetration(id){smogPenetrationCases.has(id)?smogPenetrationCases.delete(id):smogPenetrationCases.add(id);renderEvidencePack(activeCaseIndex);showToast(smogPenetrationCases.has(id)?'SWIR 2190 nm and Sentinel-1 SAR review activated.':'Alternate smog penetration review paused.','success')}
+function toggleDispatch(index){const c=casesData[index];dispatchedCases.has(c.id)?dispatchedCases.delete(c.id):dispatchedCases.add(c.id);renderEvidencePack(index);showToast(dispatchedCases.has(c.id)?`${c.id}: Nodal officer dispatched with evidence pack.`:`${c.id}: Officer dispatch recalled.`,dispatchedCases.has(c.id)?'success':'info')}
 
-      <div class="signal-box">
-        <span class="signal-label">1. Watch & Flag — INSAT-3DS ~4 km Tripwire</span>
-        <strong style="color: #fb923c;">${c.insatSpike}</strong>
-      </div>
+function qrSvg(id){let seed=[...id].reduce((n,char)=>n+char.charCodeAt(0),0),cells='';for(let row=0;row<21;row++)for(let col=0;col<21;col++){const finder=(row<7&&col<7)||(row<7&&col>13)||(row>13&&col<7),value=finder?((row%6===0||col%6===0||(row>1&&row<5&&col>1&&col<5))?1:0):((seed+row*13+col*7+row*col)%5<2?1:0);if(value)cells+=`<rect x="${col}" y="${row}" width="1" height="1"/>`}return `<svg class="qr-code" viewBox="0 0 21 21" aria-label="QR verification code">${cells}</svg>`}
+function openDossier(index){const c=casesData[index];document.getElementById('dossierModal')?.remove();const modal=document.createElement('div');modal.id='dossierModal';modal.className='dossier-modal';modal.innerHTML=`<div class="dossier-sheet" role="dialog" aria-modal="true" aria-label="Official evidence dossier"><button class="modal-close no-print" onclick="closeDossier()" aria-label="Close dossier">×</button><header><div><p>AGNI DRISHTI · OFFICER EVIDENCE DOSSIER</p><h2>${c.id}</h2><span>${c.ruleDecision} evidence — human verification required</span></div>${qrSvg(c.id)}</header><section><h3>Plot identification</h3><dl><div><dt>Location</dt><dd>${c.village}</dd></div><div><dt>Khasra / grid</dt><dd>${c.khasra}</dd></div><div><dt>Area</dt><dd>${c.acreage}</dd></div><div><dt>Coordinates</dt><dd>${c.coords[0]}, ${c.coords[1]}</dd></div></dl></section><section><h3>Satellite pass metadata</h3><dl><div><dt>INSAT-3DS</dt><dd>${c.insatSpike}</dd></div><div><dt>VIIRS pass</dt><dd>13:30 IST · ${c.viirsK} K · missed late event</dd></div><div><dt>Sentinel-2 10 m</dt><dd>${c.sentinelScar}</dd></div><div><dt>Change indicators</dt><dd>dNBR ${c.dnbr} · NDVI ${c.ndvi}</dd></div></dl></section><aside class="dossier-note">Verification QR: ${c.id}-INSAT3DS-S2 · This dossier supports field verification and does not authorize an automatic penalty.</aside><footer><span>Generated local evidence prototype · 30-min thermal fusion</span><button class="action-btn green-btn no-print" onclick="window.print()">Print dossier</button></footer></div>`;document.body.appendChild(modal);modal.querySelector('.modal-close').focus()}
+function closeDossier(){document.getElementById('dossierModal')?.remove()}
 
-      <div class="signal-box">
-        <span class="signal-label">2. Confirm — Sentinel-2 10 m Burnt-Field Map</span>
-        <strong style="color: #38bdf8;">${c.sentinelScar}</strong>
-      </div>
-
-      <div class="before-after-grid">
-        <div class="img-box">
-          <div class="patch-preview patch-green"></div>
-          <strong>Before Photo</strong>
-          <div style="color: #94a3b8; margin-top: 4px; font-size: 11px;">${c.beforeLabel}</div>
-        </div>
-        <div class="img-box">
-          <div class="patch-preview ${c.afterPatchClass}"></div>
-          <strong>After Photo</strong>
-          <div style="color: #94a3b8; margin-top: 4px; font-size: 11px;">${c.afterLabel}</div>
-        </div>
-      </div>
-
-      <div class="meta-grid">
-        <div>
-          <span class="signal-label">Burnt Area</span>
-          <strong>${c.burntArea}</strong>
-        </div>
-        <div>
-          <span class="signal-label">Confidence</span>
-          <strong>${c.confidence}</strong>
-          ${getConfidenceBarHTML(c.confidenceValue || 0, c.ruleDecision)}
-        </div>
-        <div class="meta-full">
-          <span class="signal-label">Officer Verification</span>
-          <strong style="color: #34d399;">${c.status}</strong>
-        </div>
-      </div>
-
-      <div class="gov-note">
-        🛡️ No automatic penalties — a human verifies every case on the field before any action.
-      </div>
-
-      <div class="btn-row">
-        <button class="action-btn green-btn" onclick="verifyCase(${index}, 'Verified by Officer on Field')">
-          ✅ Field Check Confirmed
-        </button>
-        <button class="action-btn gray-btn" onclick="verifyCase(${index}, 'Marked False Alarm — Re-checked')">
-          ❌ Mark False Alarm
-        </button>
-      </div>
-    </div>
-
-    <div>
-      <div class="case-list-header">Verified Case List (${casesData.length})</div>
-      ${listHtml}
-    </div>
-  `;
-}
-
-// =============================================
-// CASE SELECTION & MAP NAVIGATION
-// =============================================
-function selectCase(index) {
-  map.flyTo(casesData[index].coords, 14, { duration: 0.7 });
+function selectCase(index){
+  activeCaseIndex=index;
+  if (!isVisibleCase(casesData[index])) activeStatusFilter='all';
+  updateStatusFilterButtons();
+  renderMapLayers();
+  map.flyTo(casesData[index].coords,13,{duration:.7});
   renderEvidencePack(index);
 }
 
-// =============================================
-// OFFICER VERIFICATION
-// =============================================
-async function verifyCase(index, verdict) {
-  casesData[index].status = verdict;
-  renderEvidencePack(index);
-  
-  const isConfirmed = verdict.includes('Verified');
-  showToast(
-    `${casesData[index].id}: ${verdict}`,
-    isConfirmed ? 'success' : 'info'
-  );
+function setObservationMode(mode){
+  activeObservationMode=mode;
+  const modeMeta={
+    fusion:'🛰️ <strong>Combined Fusion:</strong> INSAT-3DS ~4 km thermal tripwire cells + Sentinel-2 10 m Khasra plots.',
+    insat:'🔥 <strong>INSAT-3DS Thermal (~4 km):</strong> Pulsing 30-minute MIR heat cells with Kelvin labels.',
+    sentinel:'🗺️ <strong>Sentinel-2 10m Burn Scar:</strong> High-resolution Khasra polygons and dNBR evidence.'
+  };
+  ['fusion','insat','sentinel'].forEach(key=>{const button=document.getElementById(`btn${key[0].toUpperCase()}${key.slice(1)}`);const active=key===mode;button.classList.toggle('active',active);button.setAttribute('aria-selected',active);});
+  document.getElementById('modeBanner').innerHTML=modeMeta[mode];
+  renderMapLayers();
+}
 
-  try {
-    await fetch('/api/verify', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id: casesData[index].id, status: verdict })
-    });
-  } catch (err) {
-    // Fallback when running without backend server
+function updateStatusFilterButtons(){
+  const ids={Confirmed:'filter-confirmed','False Alarm':'filter-false','Caught Late':'filter-late','Haze Queue':'filter-haze'};
+  Object.entries(ids).forEach(([status,id])=>document.getElementById(id).classList.toggle('active-filter',activeStatusFilter===status));
+}
+
+function setStatusFilter(status){
+  activeStatusFilter=activeStatusFilter===status?'all':status;
+  const firstMatch=casesData.findIndex(item=>isVisibleCase(item));
+  if(firstMatch>=0) activeCaseIndex=firstMatch;
+  updateStatusFilterButtons();
+  renderMapLayers();
+  renderEvidencePack(activeCaseIndex);
+  showToast(activeStatusFilter==='all'?'Showing all evidence cases.':`Filtering map and evidence pack: ${activeStatusFilter}.`,'info');
+}
+
+function toggleWindPlume(){
+  windPlumeVisible=!windPlumeVisible;
+  const toggle=document.getElementById('windPlumeToggle');
+  toggle.classList.toggle('active',windPlumeVisible);
+  toggle.setAttribute('aria-pressed',windPlumeVisible);
+  if(windPlumeVisible){
+    windPlumeLayerGroup.clearLayers();
+    const route=[[30.0682,75.9864],[30.16,76.12],[30.30,76.34],[30.44,76.60]];
+    L.polyline(route,{color:'#cbd5e1',weight:3,dashArray:'9,8',className:'wind-plume-path'}).addTo(windPlumeLayerGroup);
+    L.marker(route[2],{interactive:false,icon:L.divIcon({className:'wind-arrow-icon',html:'➜',iconSize:[28,28],iconAnchor:[14,14]})}).addTo(windPlumeLayerGroup);
+    L.marker(route[0],{interactive:false,icon:L.divIcon({className:'wind-plume-label',html:'🌬️ <strong>NW Wind 14 km/h</strong><br>→ Plume trajectory toward Patiala / NCR',iconSize:[220,48],iconAnchor:[10,45]})}).addTo(windPlumeLayerGroup);
+    windPlumeLayerGroup.addTo(map);
+    showToast('Wind & smoke plume vector enabled.','info');
+  } else { map.removeLayer(windPlumeLayerGroup); }
+}
+function switchPortal(portal){const officer=portal==='officer';document.getElementById('officerPortal').classList.toggle('hidden',!officer);document.getElementById('farmerPortal').classList.toggle('hidden',officer);document.getElementById('tabOfficer').classList.toggle('active-tab',officer);document.getElementById('tabFarmer').classList.toggle('active-tab',!officer);document.getElementById('tabOfficer').setAttribute('aria-selected',officer);document.getElementById('tabFarmer').setAttribute('aria-selected',!officer);if(officer)setTimeout(()=>map.invalidateSize(),100)}
+function toggleSidebar(){sidebarOpen=!sidebarOpen;document.getElementById('officerPortal').classList.toggle('sidebar-collapsed',!sidebarOpen);document.getElementById('toggleIcon').textContent=sidebarOpen?'◀':'▶';setTimeout(()=>map.invalidateSize(),300)}
+function bookOption(optionName){showToast(`Request sent for: ${optionName}`,'success')}
+
+updateStatusCounters();renderMapLayers();renderEvidencePack(0);
+
+// Stage-1 farmer intervention state. These flows stay usable without an API connection.
+let selectedAcreage = 5;
+const STRAW_PER_ACRE = 22;
+const BIO_CNG_RATE = 180;
+const SOIL_NITROGEN_SAVING_PER_ACRE = 1000;
+const POTENTIAL_NGT_FINE_PER_ACRE = 2500;
+
+function formatRupees(amount) {
+  return `₹${Math.round(amount).toLocaleString('en-IN')}`;
+}
+
+function updatePayoutCalculator(value) {
+  selectedAcreage = Number(value);
+  const straw = selectedAcreage * STRAW_PER_ACRE;
+  const cash = straw * BIO_CNG_RATE;
+  const soilSaving = selectedAcreage * SOIL_NITROGEN_SAVING_PER_ACRE;
+  const fineAvoided = selectedAcreage * POTENTIAL_NGT_FINE_PER_ACRE;
+  document.getElementById('acreageValue').textContent = selectedAcreage;
+  document.getElementById('strawValue').textContent = `${straw.toLocaleString('en-IN')} qtl`;
+  document.getElementById('cashPayoutValue').textContent = formatRupees(cash);
+  document.getElementById('savingsValue').textContent = formatRupees(soilSaving + fineAvoided);
+  document.getElementById('savingsDetail').textContent = `${formatRupees(soilSaving)} soil nutrients + ${formatRupees(fineAvoided)} potential fine avoided`;
+}
+
+function farmerConfirmation(title, content) {
+  document.getElementById('farmerConfirmationModal')?.remove();
+  const modal = document.createElement('div');
+  modal.id = 'farmerConfirmationModal';
+  modal.className = 'farmer-confirmation-modal';
+  modal.innerHTML = `<div class="farmer-confirmation-card" role="dialog" aria-modal="true" aria-label="${title}">
+    <button class="farmer-modal-close" onclick="closeFarmerConfirmation()" aria-label="Close confirmation">×</button>
+    <div class="confirmation-icon">✓</div>
+    <span class="confirmation-label">Stage-1 intervention confirmed</span>
+    <h3>${title}</h3>
+    ${content}
+    <button class="action-btn green-btn" onclick="closeFarmerConfirmation()">Done</button>
+  </div>`;
+  document.body.appendChild(modal);
+  modal.querySelector('.farmer-modal-close').focus();
+}
+
+function closeFarmerConfirmation() {
+  document.getElementById('farmerConfirmationModal')?.remove();
+}
+
+function reserveMachineSlot(centre, timeSlot) {
+  farmerConfirmation('Free machine slot reserved', `<div class="confirmation-details"><div><span>Custom Hiring Centre</span><strong>${centre}</strong></div><div><span>Booking token</span><strong>#CHC-8841</strong></div><div><span>Reserved time slot</span><strong>${timeSlot}</strong></div><div><span>Service fee</span><strong class="confirmation-good">Free reservation</strong></div></div><p>Your CHC will hold this slot while the field team coordinates machine delivery.</p>`);
+  showToast(`${centre}: free machine slot reserved.`, 'success');
+}
+
+function scheduleFarmGatePickup(buyer, rate, timeSlot) {
+  const straw = selectedAcreage * STRAW_PER_ACRE;
+  const payout = straw * rate;
+  farmerConfirmation('Farm-gate pickup scheduled', `<div class="confirmation-details"><div><span>Residue buyer</span><strong>${buyer}</strong></div><div><span>Selected area</span><strong>${selectedAcreage} acres · ${straw} qtl estimated</strong></div><div><span>Confirmed cash payout</span><strong class="confirmation-good">${formatRupees(payout)} @ ₹${rate}/qtl</strong></div><div><span>Pickup window</span><strong>${timeSlot}</strong></div></div><p>Keep the residue accessible at the farm gate. The buyer will confirm the vehicle before arrival.</p>`);
+  showToast(`${buyer}: pickup scheduled for ${formatRupees(payout)}.`, 'success');
+}
+
+// Calculator markup is in the farmer portal; initialize it after the document has loaded.
+updatePayoutCalculator(selectedAcreage);
+
+// Multilingual WhatsApp / IVR preview for the 72-hour, pre-burn intervention.
+let alertLanguage = 'en';
+let alertReply = null;
+const farmerAlertCopy = {
+  en: {
+    status: 'WhatsApp · automated alert',
+    intro: 'Hello, Dirba farmer 👋 Sentinel-2 has detected a harvest NDVI drop on your field (0.62 → 0.18). Your paddy harvest is complete and the next 72 hours are ideal for residue management — before any burn window.',
+    prompt: 'Choose a free, nearby option:',
+    machine: '[1] 🚜 Book Happy Seeder @ Dirba Co-op (2.1 km)',
+    buyer: '[2] 💰 Sell 110 Qtl Straw for ₹19,800 @ Sangrur Bio-CNG',
+    machineConfirm: '✅ Happy Seeder request confirmed with Dirba Co-op (2.1 km). Your free machine-slot card is highlighted below.',
+    buyerConfirm: '✅ Sangrur Bio-CNG pickup interest confirmed for 110 qtl / ₹19,800. Your payout card is highlighted below.'
+  },
+  pa: {
+    status: 'ਵਟਸਐਪ · ਆਟੋਮੈਟਿਕ ਅਲਰਟ',
+    intro: 'ਸਤ ਸ੍ਰੀ ਅਕਾਲ, ਦਿੜਬਾ ਕਿਸਾਨ ਜੀ 👋 ਸੈਂਟੀਨਲ-2 ਨੇ ਤੁਹਾਡੇ ਖੇਤ ਵਿੱਚ ਕਟਾਈ ਤੋਂ ਬਾਅਦ NDVI ਘਟਾਅ (0.62 → 0.18) ਪਾਇਆ ਹੈ। ਅਗਲੇ 72 ਘੰਟੇ ਪਰਾਲੀ ਪ੍ਰਬੰਧਨ ਲਈ ਢੁੱਕਵੇਂ ਹਨ — ਸਾੜਨ ਤੋਂ ਪਹਿਲਾਂ।',
+    prompt: 'ਨੇੜੇ ਦੀ ਮੁਫ਼ਤ ਸਹੂਲਤ ਚੁਣੋ:',
+    machine: '[1] 🚜 ਦਿੜਬਾ ਕੋ-ਆਪ ਤੋਂ ਹੈਪੀ ਸੀਡਰ ਬੁੱਕ ਕਰੋ (2.1 ਕਿ.ਮੀ.)',
+    buyer: '[2] 💰 ਸੰਗਰੂਰ ਬਾਇਓ-CNG ਨੂੰ 110 ਕੁਇੰਟਲ ਪਰਾਲੀ ₹19,800 ਵਿੱਚ ਵੇਚੋ',
+    machineConfirm: '✅ ਦਿੜਬਾ ਕੋ-ਆਪ (2.1 ਕਿ.ਮੀ.) ਕੋਲ ਹੈਪੀ ਸੀਡਰ ਦੀ ਬੇਨਤੀ ਪੱਕੀ ਹੋ ਗਈ ਹੈ। ਹੇਠਾਂ ਮਸ਼ੀਨ ਕਾਰਡ ਹਾਈਲਾਈਟ ਹੈ।',
+    buyerConfirm: '✅ 110 ਕੁਇੰਟਲ / ₹19,800 ਲਈ ਸੰਗਰੂਰ ਬਾਇਓ-CNG ਪਿਕਅੱਪ ਦਿਲਚਸਪੀ ਪੱਕੀ ਹੈ। ਹੇਠਾਂ ਭੁਗਤਾਨ ਕਾਰਡ ਹਾਈਲਾਈਟ ਹੈ।'
+  },
+  hi: {
+    status: 'व्हाट्सऐप · स्वचालित अलर्ट',
+    intro: 'नमस्ते, दिड़बा किसान जी 👋 सेंटिनल-2 ने आपके खेत में कटाई के बाद NDVI गिरावट (0.62 → 0.18) देखी है। अगले 72 घंटे पराली प्रबंधन के लिए उपयुक्त हैं — जलाने से पहले।',
+    prompt: 'पास का निःशुल्क विकल्प चुनें:',
+    machine: '[1] 🚜 दिड़बा को-ऑप से हैप्पी सीडर बुक करें (2.1 किमी)',
+    buyer: '[2] 💰 110 क्विंटल पराली ₹19,800 में संग्रूर बायो-CNG को बेचें',
+    machineConfirm: '✅ दिड़बा को-ऑप (2.1 किमी) के साथ हैप्पी सीडर अनुरोध पक्का हो गया है। नीचे मशीन कार्ड हाइलाइट किया गया है।',
+    buyerConfirm: '✅ 110 क्विंटल / ₹19,800 के लिए संग्रूर बायो-CNG पिकअप रुचि पक्की है। नीचे भुगतान कार्ड हाइलाइट किया गया है।'
   }
+};
+
+function renderAlertPreview() {
+  const copy = farmerAlertCopy[alertLanguage];
+  const chat = document.getElementById('whatsappChat');
+  if (!chat) return;
+  document.getElementById('whatsappStatus').textContent = copy.status;
+  chat.innerHTML = `<div class="chat-timestamp">Just now · Sentinel-2 harvest alert</div>
+    <div class="chat-bubble incoming">${copy.intro}</div>
+    <div class="chat-bubble incoming">${copy.prompt}</div>
+    <div class="quick-replies">
+      <button class="quick-reply" onclick="chooseAlertReply('machine')">${copy.machine}</button>
+      <button class="quick-reply" onclick="chooseAlertReply('buyer')">${copy.buyer}</button>
+    </div>
+    ${alertReply ? `<div class="chat-bubble outgoing">${alertReply === 'machine' ? copy.machine : copy.buyer}</div><div class="chat-bubble incoming confirmation-bubble">${alertReply === 'machine' ? copy.machineConfirm : copy.buyerConfirm}</div>` : ''}`;
+  if (alertReply) chat.scrollTop = chat.scrollHeight;
 }
 
-// =============================================
-// OBSERVATION MODE TOGGLE
-// =============================================
-function setObservationMode(mode) {
-  const btnMidday = document.getElementById('btnMidday');
-  const btnEvening = document.getElementById('btnEvening');
-  const banner = document.getElementById('modeBanner');
-
-  if (mode === 'midday') {
-    map.removeLayer(eveningLayerGroup);
-    btnMidday.classList.add('active');
-    btnMidday.setAttribute('aria-selected', 'true');
-    btnEvening.classList.remove('active');
-    btnEvening.setAttribute('aria-selected', 'false');
-    banner.innerHTML = "⚠️ <strong>Midday Pass (~10:30 am to 1:30 pm | MODIS & VIIRS):</strong> 0 Evening Fires Counted — Satellites look when farmers are not burning!";
-    updateStatusCounters('midday');
-  } else {
-    eveningLayerGroup.addTo(map);
-    btnEvening.classList.add('active');
-    btnEvening.setAttribute('aria-selected', 'true');
-    btnMidday.classList.remove('active');
-    btnMidday.setAttribute('aria-selected', 'false');
-    banner.innerHTML = "⚡ <strong>Active Watch:</strong> INSAT-3DS thermal scans every 30 minutes (~4 km tripwire) + Sentinel-2 (10 m) before/after field check";
-    updateStatusCounters('evening');
-  }
+function setAlertLanguage(language) {
+  alertLanguage = language;
+  ['en', 'pa', 'hi'].forEach(code => {
+    const button = document.getElementById(`lang-${code}`);
+    const active = code === language;
+    button.classList.toggle('active', active);
+    button.setAttribute('aria-selected', active);
+  });
+  renderAlertPreview();
 }
 
-// =============================================
-// PORTAL SWITCHING
-// =============================================
-function switchPortal(portal) {
-  const officerPortal = document.getElementById('officerPortal');
-  const farmerPortal = document.getElementById('farmerPortal');
-  const tabOfficer = document.getElementById('tabOfficer');
-  const tabFarmer = document.getElementById('tabFarmer');
-
-  if (portal === 'officer') {
-    officerPortal.classList.remove('hidden');
-    farmerPortal.classList.add('hidden');
-    tabOfficer.classList.add('active-tab');
-    tabOfficer.setAttribute('aria-selected', 'true');
-    tabFarmer.classList.remove('active-tab');
-    tabFarmer.setAttribute('aria-selected', 'false');
-    setTimeout(() => map.invalidateSize(), 100);
-  } else {
-    officerPortal.classList.add('hidden');
-    farmerPortal.classList.remove('hidden');
-    tabFarmer.classList.add('active-tab');
-    tabFarmer.setAttribute('aria-selected', 'true');
-    tabOfficer.classList.remove('active-tab');
-    tabOfficer.setAttribute('aria-selected', 'false');
-  }
+function highlightFarmerOption(cardId) {
+  const card = document.getElementById(cardId);
+  if (!card) return;
+  document.querySelectorAll('.option-item.alert-match').forEach(item => item.classList.remove('alert-match'));
+  card.classList.add('alert-match');
+  card.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  setTimeout(() => card.classList.remove('alert-match'), 4200);
 }
 
-// =============================================
-// SIDEBAR TOGGLE
-// =============================================
-function toggleSidebar() {
-  const layout = document.getElementById('officerPortal');
-  const icon = document.getElementById('toggleIcon');
-  sidebarOpen = !sidebarOpen;
-
-  if (sidebarOpen) {
-    layout.classList.remove('sidebar-collapsed');
-    icon.textContent = '◀';
-  } else {
-    layout.classList.add('sidebar-collapsed');
-    icon.textContent = '▶';
-  }
-
-  // Let Leaflet recalculate map size after CSS transition
-  setTimeout(() => map.invalidateSize(), 300);
+function chooseAlertReply(reply) {
+  alertReply = reply;
+  renderAlertPreview();
+  highlightFarmerOption(reply === 'machine' ? 'dirbaChcCard' : 'sangrurBuyerCard');
+  showToast(reply === 'machine' ? 'Dirba Happy Seeder request selected.' : 'Sangrur Bio-CNG sale option selected.', 'success');
 }
 
-// =============================================
-// FARMER PORTAL ACTIONS (TOAST INSTEAD OF ALERT)
-// =============================================
-function bookOption(optionName) {
-  showToast(`Request sent for: ${optionName}`, 'success');
-}
-
-// =============================================
-// START APP
-// =============================================
-loadCases();
+renderAlertPreview();
