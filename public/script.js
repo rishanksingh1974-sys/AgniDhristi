@@ -138,31 +138,294 @@ function formatRupees(amount) {
   return `₹${Math.round(amount).toLocaleString('en-IN')}`;
 }
 
+let currentFarmerLanguage = 'en';
+try {
+  const savedLang = localStorage.getItem('agnidrishti_farmer_lang');
+  if (savedLang && ['en', 'pa', 'hi'].includes(savedLang)) {
+    currentFarmerLanguage = savedLang;
+  }
+} catch (e) {}
+
+const farmerTranslations = {
+  en: {
+    portalTab: '🌾 Farmer Alert Page',
+    badge: '🟢 Live Stage-1 Pre-Burn Intervention · Triggered by Sentinel-2 Harvest NDVI Drop (72h Before Burn Window)',
+    title: '🌾 Simple Farmer Alert Page',
+    desc: 'Nearby machine or crop-residue buyer options so farmers get practical support before burning happens.',
+    calcKicker: 'Stage-1 decision support',
+    calcTitle: 'Stubble Cash Payout vs Burning Cost Calculator',
+    calcDesc: 'Set your harvested acreage to see the value of collection before the burn window.',
+    acresUnit: 'Acres',
+    scaleMin: '1 acre',
+    scaleMax: '50 acres',
+    resStrawLabel: 'Estimated Straw',
+    resStrawSub: '22 quintals per acre',
+    qtlUnit: 'qtl',
+    resCashLabel: 'Instant Bio-CNG Cash Payout',
+    resCashSub: '@ ₹180 per quintal',
+    resSavingsLabel: 'Soil Nitrogen + NGT Fine Saved',
+    savingsDetail: (soil, fine) => `${soil} soil nutrients + ${fine} potential fine avoided`,
+
+    // Machines
+    machinesHeaderTitle: '🚜 Nearby Stubble Management Machines',
+    machinesAvailableBadge: '2 Available',
+    dirbaChcName: 'Dirba Co-op Society CHC',
+    dirbaChcDesc: '3 Happy Seeders • 2 Straw Balers Available',
+    dirbaChcDist: '📍 2.1 km from ~4 km flagged zone',
+    reserveSlotBtn: '<span>🚜</span> Reserve Free Machine Slot',
+
+    sunamChcName: 'Sunam Agro Machinery Hub',
+    sunamChcDesc: '4 Super SMS • 1 Zero-Till Drill Available',
+    sunamChcDist: '📍 3.8 km from ~4 km flagged zone',
+
+    // Buyers
+    buyersHeaderTitle: '🏭 Nearby Crop-Residue Buyers',
+    buyersCountBadge: '3 Buyers',
+
+    sangrurBuyerName: 'Sangrur Bio-CNG Plant',
+    sangrurBuyerDesc: 'Buying baled paddy straw @ ₹180 / quintal',
+    sangrurBuyerDist: '📍 4.5 km away · Pickup available',
+    schedulePickupBtn: '<span>🚚</span> Schedule Farm-Gate Pickup',
+
+    barnalaBuyerName: 'Barnala Biomass Pellet Unit',
+    barnalaBuyerDesc: 'Buying loose straw @ ₹140 / quintal',
+    barnalaBuyerDist: '📍 6.2 km away · Self-delivery',
+
+    patialaBuyerName: 'Patiala Paper Mill Co-op',
+    patialaBuyerDesc: 'Buying baled rice straw @ ₹160 / quintal',
+    patialaBuyerDist: '📍 12 km away · Bulk pickup Thu & Sat',
+
+    // Helpline
+    helplineText: '📞 Need help? Call the Crop Residue Management Helpline: <strong>1800-180-1551</strong> (Toll Free)',
+
+    // Confirmation Modals
+    modalCloseAria: 'Close confirmation',
+    modalDoneBtn: 'Done',
+    modalLabel: 'Stage-1 intervention confirmed',
+
+    machineModalTitle: 'Free machine slot reserved',
+    labelChc: 'Custom Hiring Centre',
+    labelBookingToken: 'Booking token',
+    labelReservedSlot: 'Reserved time slot',
+    labelServiceFee: 'Service fee',
+    freeReservationVal: 'Free reservation',
+    machineModalNote: 'Your CHC will hold this slot while the field team coordinates machine delivery.',
+    machineToast: (centre) => `${centre}: free machine slot reserved.`,
+    timeSlotDirba: 'Today · 10:00–12:00 IST',
+    timeSlotSunam: 'Today · 14:00–16:00 IST',
+
+    buyerModalTitle: 'Farm-gate pickup scheduled',
+    labelBuyer: 'Residue buyer',
+    labelSelectedArea: 'Selected area',
+    areaEstimatedNote: (ac, qtl) => `${ac} acres · ${qtl} qtl estimated`,
+    labelConfirmedPayout: 'Confirmed cash payout',
+    payoutRateNote: (rate) => `@ ₹${rate}/qtl`,
+    labelPickupWindow: 'Pickup window',
+    buyerModalNote: 'Keep the residue accessible at the farm gate. The buyer will confirm the vehicle before arrival.',
+    buyerToast: (buyer, payout) => `${buyer}: pickup scheduled for ${payout}.`,
+    timeSlotSangrur: 'Tomorrow · 08:00–11:00 IST',
+    timeSlotBarnala: 'Tomorrow · 11:30–14:30 IST',
+    timeSlotPatiala: 'Thursday · 09:00–12:00 IST'
+  },
+  pa: {
+    portalTab: '🌾 ਕਿਸਾਨ ਅਲਰਟ ਪੇਜ',
+    badge: '🟢 ਲਾਈਵ ਸਟੇਜ-1 ਅੱਗ ਲੱਗਣ ਤੋਂ ਪਹਿਲਾਂ ਦਖਲਅੰਦਾਜ਼ੀ · ਸੈਂਟੀਨਲ-2 ਵਾਢੀ NDVI ਗਿਰਾਵਟ ਦੁਆਰਾ ਸ਼ੁਰੂ (ਸਾੜਨ ਤੋਂ 72 ਘੰਟੇ ਪਹਿਲਾਂ)',
+    title: '🌾 ਸਰਲ ਕਿਸਾਨ ਅਲਰਟ ਪੇਜ',
+    desc: 'ਨੇੜਲੀਆਂ ਮਸ਼ੀਨਾਂ ਜਾਂ ਪਰਾਲੀ ਖਰੀਦਦਾਰਾਂ ਦੇ ਵਿਕਲਪ ਤਾਂ ਜੋ ਅੱਗ ਲਗਾਉਣ ਤੋਂ ਪਹਿਲਾਂ ਕਿਸਾਨਾਂ ਨੂੰ ਅਮਲੀ ਸਹਾਇਤਾ ਮਿਲ ਸਕੇ।',
+    calcKicker: 'ਸਟੇਜ-1 ਫੈਸਲਾ ਸਹਾਇਤਾ',
+    calcTitle: 'ਪਰਾਲੀ ਨਕਦ ਭੁਗਤਾਨ ਬਨਾਮ ਸਾੜਨ ਦੀ ਲਾਗਤ ਕੈਲਕੁਲੇਟਰ',
+    calcDesc: 'ਸਾੜਨ ਦੇ ਸਮੇਂ ਤੋਂ ਪਹਿਲਾਂ ਪਰਾਲੀ ਇਕੱਠੀ ਕਰਨ ਦੀ ਕੀਮਤ ਦੇਖਣ ਲਈ ਆਪਣਾ ਕਟਾਈ ਵਾਲਾ ਰਕਬਾ ਸੈੱਟ ਕਰੋ।',
+    acresUnit: 'ਏਕੜ',
+    scaleMin: '1 ਏਕੜ',
+    scaleMax: '50 ਏਕੜ',
+    resStrawLabel: 'ਅੰਦਾਜ਼ਨ ਪਰਾਲੀ',
+    resStrawSub: '22 ਕੁਇੰਟਲ ਪ੍ਰਤੀ ਏਕੜ',
+    qtlUnit: 'ਕੁਇੰਟਲ',
+    resCashLabel: 'ਤੁਰੰਤ ਬਾਇਓ-CNG ਨਕਦ ਭੁਗਤਾਨ',
+    resCashSub: '@ ₹180 ਪ੍ਰਤੀ ਕੁਇੰਟਲ',
+    resSavingsLabel: 'ਮਿੱਟੀ ਦੇ ਪੋਸ਼ਕ ਤੱਤ + NGT ਜੁਰਮਾਨੇ ਦੀ ਬੱਚਤ',
+    savingsDetail: (soil, fine) => `${soil} ਮਿੱਟੀ ਦੇ ਪੋਸ਼ਕ ਤੱਤ + ${fine} ਸੰਭਾਵੀ ਜੁਰਮਾਨਾ ਬਚਾਇਆ`,
+
+    // Machines
+    machinesHeaderTitle: '🚜 ਨੇੜਲੀਆਂ ਪਰਾਲੀ ਪ੍ਰਬੰਧਨ ਮਸ਼ੀਨਾਂ',
+    machinesAvailableBadge: '2 ਉਪਲਬਧ',
+    dirbaChcName: 'ਦਿੜਬਾ ਕੋ-ਆਪਰੇਟਿਵ ਸੁਸਾਇਟੀ CHC',
+    dirbaChcDesc: '3 ਹੈਪੀ ਸੀਡਰ • 2 ਸਟ੍ਰਾਅ ਬੇਲਰ ਉਪਲਬਧ',
+    dirbaChcDist: '📍 ~4 ਕਿ.ਮੀ. ਫਲੈਗ ਕੀਤੇ ਜ਼ੋਨ ਤੋਂ 2.1 ਕਿ.ਮੀ.',
+    reserveSlotBtn: '<span>🚜</span> ਮੁਫ਼ਤ ਮਸ਼ੀਨ ਸਲਾਟ ਬੁੱਕ ਕਰੋ',
+
+    sunamChcName: 'ਸੁਨਾਮ ਐਗਰੋ ਮਸ਼ੀਨਰੀ ਹੱਬ',
+    sunamChcDesc: '4 ਸੁਪਰ SMS • 1 ਜ਼ੀਰੋ-ਟਿਲ ਡਰਿੱਲ ਉਪਲਬਧ',
+    sunamChcDist: '📍 ~4 ਕਿ.ਮੀ. ਫਲੈਗ ਕੀਤੇ ਜ਼ੋਨ ਤੋਂ 3.8 ਕਿ.ਮੀ.',
+
+    // Buyers
+    buyersHeaderTitle: '🏭 ਨੇੜਲੇ ਪਰਾਲੀ ਖਰੀਦਦਾਰ',
+    buyersCountBadge: '3 ਖਰੀਦਦਾਰ',
+
+    sangrurBuyerName: 'ਸੰਗਰੂਰ ਬਾਇਓ-CNG ਪਲਾਂਟ',
+    sangrurBuyerDesc: 'ਗੱਠਾਂ ਬਣੀ ਝੋਨੇ ਦੀ ਪਰਾਲੀ ਦੀ ਖਰੀਦ @ ₹180 / ਕੁਇੰਟਲ',
+    sangrurBuyerDist: '📍 4.5 ਕਿ.ਮੀ. ਦੂਰ · ਪਿਕਅੱਪ ਉਪਲਬਧ',
+    schedulePickupBtn: '<span>🚚</span> ਖੇਤ ਤੋਂ ਪਿਕਅੱਪ ਸ਼ਡਿਊਲ ਕਰੋ',
+
+    barnalaBuyerName: 'ਬਰਨਾਲਾ ਬਾਇਓਮਾਸ ਪੈਲੇਟ ਯੂਨਿਟ',
+    barnalaBuyerDesc: 'ਖੁੱਲ੍ਹੀ ਪਰਾਲੀ ਦੀ ਖਰੀਦ @ ₹140 / ਕੁਇੰਟਲ',
+    barnalaBuyerDist: '📍 6.2 ਕਿ.ਮੀ. ਦੂਰ · ਖੁਦ ਡਿਲੀਵਰੀ',
+
+    patialaBuyerName: 'ਪਟਿਆਲਾ ਪੇਪਰ ਮਿੱਲ ਕੋ-ਆਪ',
+    patialaBuyerDesc: 'ਗੱਠਾਂ ਬਣੀ ਪਰਾਲੀ ਦੀ ਖਰੀਦ @ ₹160 / ਕੁਇੰਟਲ',
+    patialaBuyerDist: '📍 12 ਕਿ.ਮੀ. ਦੂਰ · ਥੋਕ ਪਿਕਅੱਪ ਵੀਰਵਾਰ ਅਤੇ ਸ਼ਨੀਵਾਰ',
+
+    // Helpline
+    helplineText: '📞 ਮਦਦ ਚਾਹੀਦੀ ਹੈ? ਪਰਾਲੀ ਪ੍ਰਬੰਧਨ ਹੈਲਪਲਾਈਨ \'ਤੇ ਕਾਲ ਕਰੋ: <strong>1800-180-1551</strong> (ਟੋਲ ਫ੍ਰੀ)',
+
+    // Confirmation Modals
+    modalCloseAria: 'ਪੁਸ਼ਟੀਕਰਣ ਬੰਦ ਕਰੋ',
+    modalDoneBtn: 'ਠੀਕ ਹੈ',
+    modalLabel: 'ਸਟੇਜ-1 ਦਖਲਅੰਦਾਜ਼ੀ ਦੀ ਪੁਸ਼ਟੀ ਹੋ ਗਈ',
+
+    machineModalTitle: 'ਮੁਫ਼ਤ ਮਸ਼ੀਨ ਸਲਾਟ ਬੁੱਕ ਹੋ ਗਿਆ',
+    labelChc: 'ਕਸਟਮ ਹਾਇਰਿੰਗ ਸੈਂਟਰ',
+    labelBookingToken: 'ਬੁਕਿੰਗ ਟੋਕਨ',
+    labelReservedSlot: 'ਰਾਖਵਾਂ ਸਮਾਂ ਸਲਾਟ',
+    labelServiceFee: 'ਸੇਵਾ ਫੀਸ',
+    freeReservationVal: 'ਮੁਫ਼ਤ ਬੁਕਿੰਗ',
+    machineModalNote: 'ਤੁਹਾਡਾ CHC ਇਹ ਸਲਾਟ ਰਾਖਵਾਂ ਰੱਖੇਗਾ ਜਦੋਂ ਤੱਕ ਫੀਲਡ ਟੀਮ ਮਸ਼ੀਨ ਡਿਲੀਵਰੀ ਦਾ ਪ੍ਰਬੰਧ ਕਰਦੀ ਹੈ।',
+    machineToast: (centre) => `${centre}: ਮੁਫ਼ਤ ਮਸ਼ੀਨ ਸਲਾਟ ਬੁੱਕ ਹੋ ਗਿਆ।`,
+    timeSlotDirba: 'ਅੱਜ · 10:00–12:00 IST',
+    timeSlotSunam: 'ਅੱਜ · 14:00–16:00 IST',
+
+    buyerModalTitle: 'ਖੇਤ ਤੋਂ ਪਿਕਅੱਪ ਸ਼ਡਿਊਲ ਹੋ ਗਿਆ',
+    labelBuyer: 'ਪਰਾਲੀ ਖਰੀਦਦਾਰ',
+    labelSelectedArea: 'ਚੁਣਿਆ ਗਿਆ ਰਕਬਾ',
+    areaEstimatedNote: (ac, qtl) => `${ac} ਏਕੜ · ${qtl} ਕੁਇੰਟਲ ਅੰਦਾਜ਼ਨ`,
+    labelConfirmedPayout: 'ਪੱਕਾ ਨਕਦ ਭੁਗਤਾਨ',
+    payoutRateNote: (rate) => `@ ₹${rate}/ਕੁਇੰਟਲ`,
+    labelPickupWindow: 'ਪਿਕਅੱਪ ਸਮਾਂ',
+    buyerModalNote: 'ਪਰਾਲੀ ਨੂੰ ਖੇਤ ਦੇ ਗੇਟ ਨੇੜੇ ਪਹੁੰਚਯੋਗ ਰੱਖੋ। ਖਰੀਦਦਾਰ ਪਹੁੰਚਣ ਤੋਂ ਪਹਿਲਾਂ ਵਾਹਨ ਦੀ ਪੁਸ਼ਟੀ ਕਰੇਗਾ।',
+    buyerToast: (buyer, payout) => `${buyer}: ${payout} ਲਈ ਪਿਕਅੱਪ ਸ਼ਡਿਊਲ ਹੋ ਗਿਆ।`,
+    timeSlotSangrur: 'ਕੱਲ੍ਹ · 08:00–11:00 IST',
+    timeSlotBarnala: 'ਕੱਲ੍ਹ · 11:30–14:30 IST',
+    timeSlotPatiala: 'ਵੀਰਵਾਰ · 09:00–12:00 IST'
+  },
+  hi: {
+    portalTab: '🌾 किसान अलर्ट पेज',
+    badge: '🟢 लाइव स्टेज-1 आग लगने से पूर्व हस्तक्षेप · सेंटिनल-2 कटाई NDVI गिरावट द्वारा सक्रिय (जलाने से 72 घंटे पहले)',
+    title: '🌾 सरल किसान अलर्ट पेज',
+    desc: 'निकटवर्ती मशीन या फसल अवशेष खरीदार विकल्प ताकि आग लगाने से पहले किसानों को व्यावहारिक सहायता मिल सके।',
+    calcKicker: 'स्टेज-1 निर्णय सहायता',
+    calcTitle: 'पराली नकद भुगतान बनाम जलाने की लागत कैलकुलेटर',
+    calcDesc: 'जलाने की अवधि से पहले अवशेष संग्रह का मूल्य देखने के लिए अपना कटाई वाला रकबा चुनें।',
+    acresUnit: 'एकड़',
+    scaleMin: '1 एकड़',
+    scaleMax: '50 एकड़',
+    resStrawLabel: 'अनुमानित पराली',
+    resStrawSub: '22 क्विंटल प्रति एकड़',
+    qtlUnit: 'क्विंटल',
+    resCashLabel: 'त्वरित बायो-CNG नकद भुगतान',
+    resCashSub: '@ ₹180 प्रति क्विंटल',
+    resSavingsLabel: 'मिट्टी के पोषक तत्व + NGT जुर्माने की बचत',
+    savingsDetail: (soil, fine) => `${soil} मिट्टी के पोषक तत्व + ${fine} संभावित जुर्माना बचाया`,
+
+    // Machines
+    machinesHeaderTitle: '🚜 निकटवर्ती पराली प्रबंधन मशीनें',
+    machinesAvailableBadge: '2 उपलब्ध',
+    dirbaChcName: 'दिड़बा कोऑपरेटिव सोसाइटी CHC',
+    dirbaChcDesc: '3 हैप्पी सीडर • 2 स्ट्रॉ बेलर उपलब्ध',
+    dirbaChcDist: '📍 ~4 किमी फ्लैग किए गए ज़ोन से 2.1 किमी',
+    reserveSlotBtn: '<span>🚜</span> निःशुल्क मशीन स्लॉट बुक करें',
+
+    sunamChcName: 'सुनाम एग्रो मशीनरी हब',
+    sunamChcDesc: '4 सुपर SMS • 1 ज़ीरो-टिल ड्रिल उपलब्ध',
+    sunamChcDist: '📍 ~4 किमी फ्लैग किए गए ज़ोन से 3.8 किमी',
+
+    // Buyers
+    buyersHeaderTitle: '🏭 निकटवर्ती फसल अवशेष खरीदार',
+    buyersCountBadge: '3 खरीदार',
+
+    sangrurBuyerName: 'संगरूर बायो-CNG प्लांट',
+    sangrurBuyerDesc: 'गांठ बंधी धान की पराली की खरीद @ ₹180 / क्विंटल',
+    sangrurBuyerDist: '📍 4.5 किमी दूर · पिकअप उपलब्ध',
+    schedulePickupBtn: '<span>🚚</span> खेत से पिकअप शेड्यूल करें',
+
+    barnalaBuyerName: 'बरनाला बायोमास पेलेट यूनिट',
+    barnalaBuyerDesc: 'खुली पराली की खरीद @ ₹140 / क्विंटल',
+    barnalaBuyerDist: '📍 6.2 किमी दूर · स्वयं डिलीवरी',
+
+    patialaBuyerName: 'पटियाला पेपर मिल को-ऑप',
+    patialaBuyerDesc: 'गांठ बंधी पराली की खरीद @ ₹160 / क्विंटल',
+    patialaBuyerDist: '📍 12 किमी दूर · थोक पिकअप गुरुवार और शनिवार',
+
+    // Helpline
+    helplineText: '📞 सहायता चाहिए? फसल अवशेष प्रबंधन हेल्पलाइन पर कॉल करें: <strong>1800-180-1551</strong> (टोल फ्री)',
+
+    // Confirmation Modals
+    modalCloseAria: 'पुष्टि बंद करें',
+    modalDoneBtn: 'संपन्न',
+    modalLabel: 'स्टेज-1 हस्तक्षेप की पुष्टि हो गई',
+
+    machineModalTitle: 'निःशुल्क मशीन स्लॉट बुक हो गया',
+    labelChc: 'कस्टम हायरिंग सेंटर',
+    labelBookingToken: 'बुकिंग टोकन',
+    labelReservedSlot: 'आरक्षित समय स्लॉट',
+    labelServiceFee: 'सेवा शुल्क',
+    freeReservationVal: 'निःशुल्क बुकिंग',
+    machineModalNote: 'आपकी CHC इस स्लॉट को सुरक्षित रखेगी जब तक फील्ड टीम मशीन डिलीवरी का समन्वय करती है।',
+    machineToast: (centre) => `${centre}: निःशुल्क मशीन स्लॉट बुक हो गया।`,
+    timeSlotDirba: 'आज · 10:00–12:00 IST',
+    timeSlotSunam: 'आज · 14:00–16:00 IST',
+
+    buyerModalTitle: 'खेत से पिकअप शेड्यूल हो गया',
+    labelBuyer: 'पराली खरीदार',
+    labelSelectedArea: 'चयनित रकबा',
+    areaEstimatedNote: (ac, qtl) => `${ac} एकड़ · ${qtl} क्विंटल अनुमानित`,
+    labelConfirmedPayout: 'पुष्टि की गई नकद राशि',
+    payoutRateNote: (rate) => `@ ₹${rate}/क्विंटल`,
+    labelPickupWindow: 'पिकअप समय',
+    buyerModalNote: 'अवशेष को खेत के गेट के पास सुलभ रखें। खरीदार पहुंचने से पहले वाहन की पुष्टि करेगा।',
+    buyerToast: (buyer, payout) => `${buyer}: ${payout} के लिए पिकअप शेड्यूल हो गया।`,
+    timeSlotSangrur: 'कल · 08:00–11:00 IST',
+    timeSlotBarnala: 'कल · 11:30–14:30 IST',
+    timeSlotPatiala: 'गुरुवार · 09:00–12:00 IST'
+  }
+};
+
 function updatePayoutCalculator(value) {
   selectedAcreage = Number(value);
+  const copy = farmerTranslations[currentFarmerLanguage] || farmerTranslations.en;
   const straw = selectedAcreage * STRAW_PER_ACRE;
   const cash = straw * BIO_CNG_RATE;
   const soilSaving = selectedAcreage * SOIL_NITROGEN_SAVING_PER_ACRE;
   const fineAvoided = selectedAcreage * POTENTIAL_NGT_FINE_PER_ACRE;
-  document.getElementById('acreageValue').textContent = selectedAcreage;
-  document.getElementById('strawValue').textContent = `${straw.toLocaleString('en-IN')} qtl`;
-  document.getElementById('cashPayoutValue').textContent = formatRupees(cash);
-  document.getElementById('savingsValue').textContent = formatRupees(soilSaving + fineAvoided);
-  document.getElementById('savingsDetail').textContent = `${formatRupees(soilSaving)} soil nutrients + ${formatRupees(fineAvoided)} potential fine avoided`;
+
+  const acreageEl = document.getElementById('acreageValue');
+  if (acreageEl) acreageEl.textContent = selectedAcreage;
+
+  const strawEl = document.getElementById('strawValue');
+  if (strawEl) strawEl.textContent = `${straw.toLocaleString('en-IN')} ${copy.qtlUnit}`;
+
+  const cashEl = document.getElementById('cashPayoutValue');
+  if (cashEl) cashEl.textContent = formatRupees(cash);
+
+  const savingsEl = document.getElementById('savingsValue');
+  if (savingsEl) savingsEl.textContent = formatRupees(soilSaving + fineAvoided);
+
+  const detailEl = document.getElementById('savingsDetail');
+  if (detailEl) detailEl.textContent = copy.savingsDetail(formatRupees(soilSaving), formatRupees(fineAvoided));
 }
 
 function farmerConfirmation(title, content) {
+  const copy = farmerTranslations[currentFarmerLanguage] || farmerTranslations.en;
   document.getElementById('farmerConfirmationModal')?.remove();
   const modal = document.createElement('div');
   modal.id = 'farmerConfirmationModal';
   modal.className = 'farmer-confirmation-modal';
   modal.innerHTML = `<div class="farmer-confirmation-card" role="dialog" aria-modal="true" aria-label="${title}">
-    <button class="farmer-modal-close" onclick="closeFarmerConfirmation()" aria-label="Close confirmation">×</button>
+    <button class="farmer-modal-close" onclick="closeFarmerConfirmation()" aria-label="${copy.modalCloseAria}">×</button>
     <div class="confirmation-icon">✓</div>
-    <span class="confirmation-label">Stage-1 intervention confirmed</span>
+    <span class="confirmation-label">${copy.modalLabel}</span>
     <h3>${title}</h3>
     ${content}
-    <button class="action-btn green-btn" onclick="closeFarmerConfirmation()">Done</button>
+    <button class="action-btn green-btn" onclick="closeFarmerConfirmation()">${copy.modalDoneBtn}</button>
   </div>`;
   document.body.appendChild(modal);
   modal.querySelector('.farmer-modal-close').focus();
@@ -173,94 +436,132 @@ function closeFarmerConfirmation() {
 }
 
 function reserveMachineSlot(centre, timeSlot) {
-  farmerConfirmation('Free machine slot reserved', `<div class="confirmation-details"><div><span>Custom Hiring Centre</span><strong>${centre}</strong></div><div><span>Booking token</span><strong>#CHC-8841</strong></div><div><span>Reserved time slot</span><strong>${timeSlot}</strong></div><div><span>Service fee</span><strong class="confirmation-good">Free reservation</strong></div></div><p>Your CHC will hold this slot while the field team coordinates machine delivery.</p>`);
-  showToast(`${centre}: free machine slot reserved.`, 'success');
+  const copy = farmerTranslations[currentFarmerLanguage] || farmerTranslations.en;
+  farmerConfirmation(copy.machineModalTitle, `<div class="confirmation-details"><div><span>${copy.labelChc}</span><strong>${centre}</strong></div><div><span>${copy.labelBookingToken}</span><strong>#CHC-8841</strong></div><div><span>${copy.labelReservedSlot}</span><strong>${timeSlot}</strong></div><div><span>${copy.labelServiceFee}</span><strong class="confirmation-good">${copy.freeReservationVal}</strong></div></div><p>${copy.machineModalNote}</p>`);
+  showToast(copy.machineToast(centre), 'success');
 }
 
 function scheduleFarmGatePickup(buyer, rate, timeSlot) {
+  const copy = farmerTranslations[currentFarmerLanguage] || farmerTranslations.en;
   const straw = selectedAcreage * STRAW_PER_ACRE;
   const payout = straw * rate;
-  farmerConfirmation('Farm-gate pickup scheduled', `<div class="confirmation-details"><div><span>Residue buyer</span><strong>${buyer}</strong></div><div><span>Selected area</span><strong>${selectedAcreage} acres · ${straw} qtl estimated</strong></div><div><span>Confirmed cash payout</span><strong class="confirmation-good">${formatRupees(payout)} @ ₹${rate}/qtl</strong></div><div><span>Pickup window</span><strong>${timeSlot}</strong></div></div><p>Keep the residue accessible at the farm gate. The buyer will confirm the vehicle before arrival.</p>`);
-  showToast(`${buyer}: pickup scheduled for ${formatRupees(payout)}.`, 'success');
+  farmerConfirmation(copy.buyerModalTitle, `<div class="confirmation-details"><div><span>${copy.labelBuyer}</span><strong>${buyer}</strong></div><div><span>${copy.labelSelectedArea}</span><strong>${copy.areaEstimatedNote(selectedAcreage, straw)}</strong></div><div><span>${copy.labelConfirmedPayout}</span><strong class="confirmation-good">${formatRupees(payout)} ${copy.payoutRateNote(rate)}</strong></div><div><span>${copy.labelPickupWindow}</span><strong>${timeSlot}</strong></div></div><p>${copy.buyerModalNote}</p>`);
+  showToast(copy.buyerToast(buyer, formatRupees(payout)), 'success');
 }
 
-// Calculator markup is in the farmer portal; initialize it after the document has loaded.
-updatePayoutCalculator(selectedAcreage);
-
-// Multilingual WhatsApp / IVR preview for the 72-hour, pre-burn intervention.
-let alertLanguage = 'en';
-let alertReply = null;
-const farmerAlertCopy = {
-  en: {
-    status: 'WhatsApp · automated alert',
-    intro: 'Hello, Dirba farmer 👋 Sentinel-2 has detected a harvest NDVI drop on your field (0.62 → 0.18). Your paddy harvest is complete and the next 72 hours are ideal for residue management — before any burn window.',
-    prompt: 'Choose a free, nearby option:',
-    machine: '[1] 🚜 Book Happy Seeder @ Dirba Co-op (2.1 km)',
-    buyer: '[2] 💰 Sell 110 Qtl Straw for ₹19,800 @ Sangrur Bio-CNG',
-    machineConfirm: '✅ Happy Seeder request confirmed with Dirba Co-op (2.1 km). Your free machine-slot card is highlighted below.',
-    buyerConfirm: '✅ Sangrur Bio-CNG pickup interest confirmed for 110 qtl / ₹19,800. Your payout card is highlighted below.'
-  },
-  pa: {
-    status: 'ਵਟਸਐਪ · ਆਟੋਮੈਟਿਕ ਅਲਰਟ',
-    intro: 'ਸਤ ਸ੍ਰੀ ਅਕਾਲ, ਦਿੜਬਾ ਕਿਸਾਨ ਜੀ 👋 ਸੈਂਟੀਨਲ-2 ਨੇ ਤੁਹਾਡੇ ਖੇਤ ਵਿੱਚ ਕਟਾਈ ਤੋਂ ਬਾਅਦ NDVI ਘਟਾਅ (0.62 → 0.18) ਪਾਇਆ ਹੈ। ਅਗਲੇ 72 ਘੰਟੇ ਪਰਾਲੀ ਪ੍ਰਬੰਧਨ ਲਈ ਢੁੱਕਵੇਂ ਹਨ — ਸਾੜਨ ਤੋਂ ਪਹਿਲਾਂ।',
-    prompt: 'ਨੇੜੇ ਦੀ ਮੁਫ਼ਤ ਸਹੂਲਤ ਚੁਣੋ:',
-    machine: '[1] 🚜 ਦਿੜਬਾ ਕੋ-ਆਪ ਤੋਂ ਹੈਪੀ ਸੀਡਰ ਬੁੱਕ ਕਰੋ (2.1 ਕਿ.ਮੀ.)',
-    buyer: '[2] 💰 ਸੰਗਰੂਰ ਬਾਇਓ-CNG ਨੂੰ 110 ਕੁਇੰਟਲ ਪਰਾਲੀ ₹19,800 ਵਿੱਚ ਵੇਚੋ',
-    machineConfirm: '✅ ਦਿੜਬਾ ਕੋ-ਆਪ (2.1 ਕਿ.ਮੀ.) ਕੋਲ ਹੈਪੀ ਸੀਡਰ ਦੀ ਬੇਨਤੀ ਪੱਕੀ ਹੋ ਗਈ ਹੈ। ਹੇਠਾਂ ਮਸ਼ੀਨ ਕਾਰਡ ਹਾਈਲਾਈਟ ਹੈ।',
-    buyerConfirm: '✅ 110 ਕੁਇੰਟਲ / ₹19,800 ਲਈ ਸੰਗਰੂਰ ਬਾਇਓ-CNG ਪਿਕਅੱਪ ਦਿਲਚਸਪੀ ਪੱਕੀ ਹੈ। ਹੇਠਾਂ ਭੁਗਤਾਨ ਕਾਰਡ ਹਾਈਲਾਈਟ ਹੈ।'
-  },
-  hi: {
-    status: 'व्हाट्सऐप · स्वचालित अलर्ट',
-    intro: 'नमस्ते, दिड़बा किसान जी 👋 सेंटिनल-2 ने आपके खेत में कटाई के बाद NDVI गिरावट (0.62 → 0.18) देखी है। अगले 72 घंटे पराली प्रबंधन के लिए उपयुक्त हैं — जलाने से पहले।',
-    prompt: 'पास का निःशुल्क विकल्प चुनें:',
-    machine: '[1] 🚜 दिड़बा को-ऑप से हैप्पी सीडर बुक करें (2.1 किमी)',
-    buyer: '[2] 💰 110 क्विंटल पराली ₹19,800 में संग्रूर बायो-CNG को बेचें',
-    machineConfirm: '✅ दिड़बा को-ऑप (2.1 किमी) के साथ हैप्पी सीडर अनुरोध पक्का हो गया है। नीचे मशीन कार्ड हाइलाइट किया गया है।',
-    buyerConfirm: '✅ 110 क्विंटल / ₹19,800 के लिए संग्रूर बायो-CNG पिकअप रुचि पक्की है। नीचे भुगतान कार्ड हाइलाइट किया गया है।'
+function handleReserveMachine(machineKey) {
+  const copy = farmerTranslations[currentFarmerLanguage] || farmerTranslations.en;
+  let centre = copy.dirbaChcName;
+  let timeSlot = copy.timeSlotDirba;
+  if (machineKey === 'sunam') {
+    centre = copy.sunamChcName;
+    timeSlot = copy.timeSlotSunam;
   }
-};
-
-function renderAlertPreview() {
-  const copy = farmerAlertCopy[alertLanguage];
-  const chat = document.getElementById('whatsappChat');
-  if (!chat) return;
-  document.getElementById('whatsappStatus').textContent = copy.status;
-  chat.innerHTML = `<div class="chat-timestamp">Just now · Sentinel-2 harvest alert</div>
-    <div class="chat-bubble incoming">${copy.intro}</div>
-    <div class="chat-bubble incoming">${copy.prompt}</div>
-    <div class="quick-replies">
-      <button class="quick-reply" onclick="chooseAlertReply('machine')">${copy.machine}</button>
-      <button class="quick-reply" onclick="chooseAlertReply('buyer')">${copy.buyer}</button>
-    </div>
-    ${alertReply ? `<div class="chat-bubble outgoing">${alertReply === 'machine' ? copy.machine : copy.buyer}</div><div class="chat-bubble incoming confirmation-bubble">${alertReply === 'machine' ? copy.machineConfirm : copy.buyerConfirm}</div>` : ''}`;
-  if (alertReply) chat.scrollTop = chat.scrollHeight;
+  reserveMachineSlot(centre, timeSlot);
 }
 
-function setAlertLanguage(language) {
-  alertLanguage = language;
+function handleSchedulePickup(buyerKey) {
+  const copy = farmerTranslations[currentFarmerLanguage] || farmerTranslations.en;
+  let buyer = copy.sangrurBuyerName;
+  let rate = 180;
+  let timeSlot = copy.timeSlotSangrur;
+  if (buyerKey === 'barnala') {
+    buyer = copy.barnalaBuyerName;
+    rate = 140;
+    timeSlot = copy.timeSlotBarnala;
+  } else if (buyerKey === 'patiala') {
+    buyer = copy.patialaBuyerName;
+    rate = 160;
+    timeSlot = copy.timeSlotPatiala;
+  }
+  scheduleFarmGatePickup(buyer, rate, timeSlot);
+}
+
+function setLanguage(language) {
+  if (!['en', 'pa', 'hi'].includes(language)) language = 'en';
+  currentFarmerLanguage = language;
+  try {
+    localStorage.setItem('agnidrishti_farmer_lang', language);
+  } catch (e) {}
+
+  const copy = farmerTranslations[language] || farmerTranslations.en;
+
+  // Update button active state
   ['en', 'pa', 'hi'].forEach(code => {
-    const button = document.getElementById(`lang-${code}`);
-    const active = code === language;
-    button.classList.toggle('active', active);
-    button.setAttribute('aria-selected', active);
+    const btn = document.getElementById(`lang-${code}`);
+    if (btn) {
+      const active = code === language;
+      btn.classList.toggle('active', active);
+      btn.setAttribute('aria-selected', active);
+    }
   });
-  renderAlertPreview();
+
+  // Navigation tab
+  const tabFarmer = document.getElementById('tabFarmer');
+  if (tabFarmer) tabFarmer.innerHTML = `<span>🌾</span> ${copy.portalTab.replace('🌾 ', '')}`;
+
+  // Helper setters
+  const setHtml = (id, html) => { const el = document.getElementById(id); if (el) el.innerHTML = html; };
+  const setText = (id, text) => { const el = document.getElementById(id); if (el) el.textContent = text; };
+
+  // Banner
+  setText('farmerBadge', copy.badge);
+  setText('farmerTitle', copy.title);
+  setText('farmerDesc', copy.desc);
+
+  // Calculator
+  setText('payoutKicker', copy.calcKicker);
+  setText('payoutCalculatorTitle', copy.calcTitle);
+  setText('payoutDesc', copy.calcDesc);
+  setText('acreageUnit', copy.acresUnit);
+  setText('scaleMin', copy.scaleMin);
+  setText('scaleMax', copy.scaleMax);
+  setText('resStrawLabel', copy.resStrawLabel);
+  setText('resStrawSub', copy.resStrawSub);
+  setText('resCashLabel', copy.resCashLabel);
+  setText('resCashSub', copy.resCashSub);
+  setText('resSavingsLabel', copy.resSavingsLabel);
+
+  // Machines
+  setText('machinesHeaderTitle', copy.machinesHeaderTitle);
+  setText('machinesAvailableBadge', copy.machinesAvailableBadge);
+  setText('dirbaChcName', copy.dirbaChcName);
+  setText('dirbaChcDesc', copy.dirbaChcDesc);
+  setText('dirbaChcDist', copy.dirbaChcDist);
+  setHtml('dirbaReserveBtn', copy.reserveSlotBtn);
+
+  setText('sunamChcName', copy.sunamChcName);
+  setText('sunamChcDesc', copy.sunamChcDesc);
+  setText('sunamChcDist', copy.sunamChcDist);
+  setHtml('sunamReserveBtn', copy.reserveSlotBtn);
+
+  // Buyers
+  setText('buyersHeaderTitle', copy.buyersHeaderTitle);
+  setText('buyersCountBadge', copy.buyersCountBadge);
+  setText('sangrurBuyerName', copy.sangrurBuyerName);
+  setText('sangrurBuyerDesc', copy.sangrurBuyerDesc);
+  setText('sangrurBuyerDist', copy.sangrurBuyerDist);
+  setHtml('sangrurPickupBtn', copy.schedulePickupBtn);
+
+  setText('barnalaBuyerName', copy.barnalaBuyerName);
+  setText('barnalaBuyerDesc', copy.barnalaBuyerDesc);
+  setText('barnalaBuyerDist', copy.barnalaBuyerDist);
+  setHtml('barnalaPickupBtn', copy.schedulePickupBtn);
+
+  setText('patialaBuyerName', copy.patialaBuyerName);
+  setText('patialaBuyerDesc', copy.patialaBuyerDesc);
+  setText('patialaBuyerDist', copy.patialaBuyerDist);
+  setHtml('patialaPickupBtn', copy.schedulePickupBtn);
+
+  // Helpline
+  setHtml('farmerHelplineText', copy.helplineText);
+
+  // Re-calculate dynamic values with current language unit
+  updatePayoutCalculator(selectedAcreage);
 }
 
-function highlightFarmerOption(cardId) {
-  const card = document.getElementById(cardId);
-  if (!card) return;
-  document.querySelectorAll('.option-item.alert-match').forEach(item => item.classList.remove('alert-match'));
-  card.classList.add('alert-match');
-  card.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-  setTimeout(() => card.classList.remove('alert-match'), 4200);
-}
+// Backward-compatibility alias
+window.setAlertLanguage = setLanguage;
 
-function chooseAlertReply(reply) {
-  alertReply = reply;
-  renderAlertPreview();
-  highlightFarmerOption(reply === 'machine' ? 'dirbaChcCard' : 'sangrurBuyerCard');
-  showToast(reply === 'machine' ? 'Dirba Happy Seeder request selected.' : 'Sangrur Bio-CNG sale option selected.', 'success');
-}
-
-renderAlertPreview();
+// Initialize language and calculator
+setLanguage(currentFarmerLanguage);

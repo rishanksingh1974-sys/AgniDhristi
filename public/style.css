@@ -850,6 +850,15 @@ button:focus:not(:focus-visible) {
   box-shadow: var(--shadow-sm);
 }
 
+.farmer-banner-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+
 .planned-badge {
   display: inline-block;
   background-color: rgba(220, 230, 217, 0.2);
@@ -1621,11 +1630,13 @@ button:focus:not(:focus-visible) {
 }
 @keyframes farmer-option-pulse { 50% { transform: translateY(-2px) scale(1.012); } }
 @media (max-width: 600px) {
-  .whatsapp-preview-header { flex-direction: column; }
-  .whatsapp-shell { width: 100%; }
-  .language-switcher { width: 100%; }
-  .language-btn { flex: 1; }
-  .whatsapp-ivr { display: none; }
+  .farmer-banner-top {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+  }
+  .language-switcher { width: 100%; justify-content: center; }
+  .language-btn { flex: 1; text-align: center; }
 }
 
 /* Map observation modes, case filters, and air-quality plume */

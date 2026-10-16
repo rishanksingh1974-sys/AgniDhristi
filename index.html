@@ -144,45 +144,33 @@
   <!-- SIMPLE FARMER ALERT PAGE PORTAL -->
   <section id="farmerPortal" class="farmer-container hidden">
     <div class="farmer-banner">
-      <span class="planned-badge stage-one-badge">🟢 Live Stage-1 Pre-Burn Intervention · Triggered by Sentinel-2 Harvest NDVI Drop (72h Before Burn Window)</span>
-      <h2>🌾 Simple Farmer Alert Page</h2>
-      <p>Nearby machine or crop-residue buyer options so farmers get practical support before burning happens.</p>
+      <div class="farmer-banner-top">
+        <span id="farmerBadge" class="planned-badge stage-one-badge">🟢 Live Stage-1 Pre-Burn Intervention · Triggered by Sentinel-2 Harvest NDVI Drop (72h Before Burn Window)</span>
+        <div class="language-switcher" role="tablist" aria-label="Language selection">
+          <button id="lang-en" class="language-btn active" role="tab" aria-selected="true" onclick="setLanguage('en')">English</button>
+          <button id="lang-pa" class="language-btn" role="tab" aria-selected="false" onclick="setLanguage('pa')">ਪੰਜਾਬੀ</button>
+          <button id="lang-hi" class="language-btn" role="tab" aria-selected="false" onclick="setLanguage('hi')">हिन्दी</button>
+        </div>
+      </div>
+      <h2 id="farmerTitle">🌾 Simple Farmer Alert Page</h2>
+      <p id="farmerDesc">Nearby machine or crop-residue buyer options so farmers get practical support before burning happens.</p>
     </div>
 
     <section class="payout-calculator" aria-labelledby="payoutCalculatorTitle">
       <div class="calculator-heading">
         <div>
-          <span class="calculator-kicker">Stage-1 decision support</span>
+          <span id="payoutKicker" class="calculator-kicker">Stage-1 decision support</span>
           <h3 id="payoutCalculatorTitle">Stubble Cash Payout vs Burning Cost Calculator</h3>
-          <p>Set your harvested acreage to see the value of collection before the burn window.</p>
+          <p id="payoutDesc">Set your harvested acreage to see the value of collection before the burn window.</p>
         </div>
-        <strong><span id="acreageValue">5</span> Acres</strong>
+        <strong><span id="acreageValue">5</span> <span id="acreageUnit">Acres</span></strong>
       </div>
       <input id="acreageSlider" class="acreage-slider" type="range" min="1" max="50" value="5" oninput="updatePayoutCalculator(this.value)" aria-label="Harvested acreage">
-      <div class="calculator-scale"><span>1 acre</span><span>50 acres</span></div>
+      <div class="calculator-scale"><span id="scaleMin">1 acre</span><span id="scaleMax">50 acres</span></div>
       <div class="calculator-results">
-        <div class="calc-result cash-result"><span>Estimated Straw</span><strong id="strawValue">110 qtl</strong><small>22 quintals per acre</small></div>
-        <div class="calc-result cash-result"><span>Instant Bio-CNG Cash Payout</span><strong id="cashPayoutValue">₹19,800</strong><small>@ ₹180 per quintal</small></div>
-        <div class="calc-result savings-result"><span>Soil Nitrogen + NGT Fine Saved</span><strong id="savingsValue">₹17,500</strong><small id="savingsDetail">₹5,000 soil nutrients + ₹12,500 potential fine avoided</small></div>
-      </div>
-    </section>
-
-    <section class="whatsapp-preview" aria-labelledby="whatsappPreviewTitle">
-      <div class="whatsapp-preview-header">
-        <div>
-          <span class="calculator-kicker">Automated 72-hour intervention</span>
-          <h3 id="whatsappPreviewTitle">📱 Farmer WhatsApp / IVR Alert Preview</h3>
-          <p>Preview the alert sent to a Dirba farmer as soon as Sentinel-2 confirms harvest.</p>
-        </div>
-        <div class="language-switcher" role="tablist" aria-label="Alert language">
-          <button id="lang-en" class="language-btn active" role="tab" aria-selected="true" onclick="setAlertLanguage('en')">English</button>
-          <button id="lang-pa" class="language-btn" role="tab" aria-selected="false" onclick="setAlertLanguage('pa')">ਪੰਜਾਬੀ</button>
-          <button id="lang-hi" class="language-btn" role="tab" aria-selected="false" onclick="setAlertLanguage('hi')">हिंदी</button>
-        </div>
-      </div>
-      <div class="whatsapp-shell" aria-live="polite">
-        <div class="whatsapp-topbar"><span class="whatsapp-avatar">🌾</span><div><strong>AgniDrishti Farmer Support</strong><small id="whatsappStatus">WhatsApp · automated alert</small></div><span class="whatsapp-ivr">IVR ready</span></div>
-        <div id="whatsappChat" class="whatsapp-chat"></div>
+        <div class="calc-result cash-result"><span id="resStrawLabel">Estimated Straw</span><strong id="strawValue">110 qtl</strong><small id="resStrawSub">22 quintals per acre</small></div>
+        <div class="calc-result cash-result"><span id="resCashLabel">Instant Bio-CNG Cash Payout</span><strong id="cashPayoutValue">₹19,800</strong><small id="resCashSub">@ ₹180 per quintal</small></div>
+        <div class="calc-result savings-result"><span id="resSavingsLabel">Soil Nitrogen + NGT Fine Saved</span><strong id="savingsValue">₹17,500</strong><small id="savingsDetail">₹5,000 soil nutrients + ₹12,500 potential fine avoided</small></div>
       </div>
     </section>
 
@@ -190,28 +178,28 @@
       <!-- Machine Options -->
       <div class="farmer-card">
         <div class="farmer-card-header">
-          <h3>🚜 Nearby Stubble Management Machines</h3>
-          <span class="availability-badge available">2 Available</span>
+          <h3 id="machinesHeaderTitle">🚜 Nearby Stubble Management Machines</h3>
+          <span id="machinesAvailableBadge" class="availability-badge available">2 Available</span>
         </div>
 
         <div id="dirbaChcCard" class="option-item">
           <div class="option-info">
-            <h4>Dirba Co-op Society CHC</h4>
-            <p>3 Happy Seeders • 2 Straw Balers Available</p>
-            <small class="distance-tag">📍 2.1 km from ~4 km flagged zone</small>
+            <h4 id="dirbaChcName">Dirba Co-op Society CHC</h4>
+            <p id="dirbaChcDesc">3 Happy Seeders • 2 Straw Balers Available</p>
+            <small id="dirbaChcDist" class="distance-tag">📍 2.1 km from ~4 km flagged zone</small>
           </div>
-          <button class="action-btn green-btn" onclick="reserveMachineSlot('Dirba Co-op Society CHC', 'Today · 10:00–12:00 IST')">
+          <button id="dirbaReserveBtn" class="action-btn green-btn" onclick="handleReserveMachine('dirba')">
             <span>🚜</span> Reserve Free Machine Slot
           </button>
         </div>
 
         <div id="sunamChcCard" class="option-item">
           <div class="option-info">
-            <h4>Sunam Agro Machinery Hub</h4>
-            <p>4 Super SMS • 1 Zero-Till Drill Available</p>
-            <small class="distance-tag">📍 3.8 km from ~4 km flagged zone</small>
+            <h4 id="sunamChcName">Sunam Agro Machinery Hub</h4>
+            <p id="sunamChcDesc">4 Super SMS • 1 Zero-Till Drill Available</p>
+            <small id="sunamChcDist" class="distance-tag">📍 3.8 km from ~4 km flagged zone</small>
           </div>
-          <button class="action-btn green-btn" onclick="reserveMachineSlot('Sunam Agro Machinery Hub', 'Today · 14:00–16:00 IST')">
+          <button id="sunamReserveBtn" class="action-btn green-btn" onclick="handleReserveMachine('sunam')">
             <span>🚜</span> Reserve Free Machine Slot
           </button>
         </div>
@@ -220,39 +208,39 @@
       <!-- Buyer Options -->
       <div class="farmer-card">
         <div class="farmer-card-header">
-          <h3>🏭 Nearby Crop-Residue Buyers</h3>
-          <span class="availability-badge buyer">3 Buyers</span>
+          <h3 id="buyersHeaderTitle">🏭 Nearby Crop-Residue Buyers</h3>
+          <span id="buyersCountBadge" class="availability-badge buyer">3 Buyers</span>
         </div>
 
         <div id="sangrurBuyerCard" class="option-item">
           <div class="option-info">
-            <h4>Sangrur Bio-CNG Plant</h4>
-            <p>Buying baled paddy straw @ ₹180 / quintal</p>
-            <small class="distance-tag">📍 4.5 km away · Pickup available</small>
+            <h4 id="sangrurBuyerName">Sangrur Bio-CNG Plant</h4>
+            <p id="sangrurBuyerDesc">Buying baled paddy straw @ ₹180 / quintal</p>
+            <small id="sangrurBuyerDist" class="distance-tag">📍 4.5 km away · Pickup available</small>
           </div>
-          <button class="action-btn blue-btn" onclick="scheduleFarmGatePickup('Sangrur Bio-CNG Plant', 180, 'Tomorrow · 08:00–11:00 IST')">
+          <button id="sangrurPickupBtn" class="action-btn blue-btn" onclick="handleSchedulePickup('sangrur')">
             <span>🚚</span> Schedule Farm-Gate Pickup
           </button>
         </div>
 
         <div id="barnalaBuyerCard" class="option-item">
           <div class="option-info">
-            <h4>Barnala Biomass Pellet Unit</h4>
-            <p>Buying loose straw @ ₹140 / quintal</p>
-            <small class="distance-tag">📍 6.2 km away · Self-delivery</small>
+            <h4 id="barnalaBuyerName">Barnala Biomass Pellet Unit</h4>
+            <p id="barnalaBuyerDesc">Buying loose straw @ ₹140 / quintal</p>
+            <small id="barnalaBuyerDist" class="distance-tag">📍 6.2 km away · Self-delivery</small>
           </div>
-          <button class="action-btn blue-btn" onclick="scheduleFarmGatePickup('Barnala Biomass Pellet Unit', 140, 'Tomorrow · 11:30–14:30 IST')">
+          <button id="barnalaPickupBtn" class="action-btn blue-btn" onclick="handleSchedulePickup('barnala')">
             <span>🚚</span> Schedule Farm-Gate Pickup
           </button>
         </div>
 
         <div id="patialaBuyerCard" class="option-item">
           <div class="option-info">
-            <h4>Patiala Paper Mill Co-op</h4>
-            <p>Buying baled rice straw @ ₹160 / quintal</p>
-            <small class="distance-tag">📍 12 km away · Bulk pickup Thu & Sat</small>
+            <h4 id="patialaBuyerName">Patiala Paper Mill Co-op</h4>
+            <p id="patialaBuyerDesc">Buying baled rice straw @ ₹160 / quintal</p>
+            <small id="patialaBuyerDist" class="distance-tag">📍 12 km away · Bulk pickup Thu & Sat</small>
           </div>
-          <button class="action-btn blue-btn" onclick="scheduleFarmGatePickup('Patiala Paper Mill Co-op', 160, 'Thursday · 09:00–12:00 IST')">
+          <button id="patialaPickupBtn" class="action-btn blue-btn" onclick="handleSchedulePickup('patiala')">
             <span>🚚</span> Schedule Farm-Gate Pickup
           </button>
         </div>
@@ -261,7 +249,7 @@
 
     <!-- Helpline Info -->
     <div class="farmer-helpline">
-      <p>📞 Need help? Call the Crop Residue Management Helpline: <strong>1800-180-1551</strong> (Toll Free)</p>
+      <p id="farmerHelplineText">📞 Need help? Call the Crop Residue Management Helpline: <strong>1800-180-1551</strong> (Toll Free)</p>
     </div>
   </section>
 
