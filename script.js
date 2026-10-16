@@ -121,7 +121,21 @@ function toggleWindPlume(){
     showToast('Wind & smoke plume vector enabled.','info');
   } else { map.removeLayer(windPlumeLayerGroup); }
 }
-function switchPortal(portal){const officer=portal==='officer';document.getElementById('officerPortal').classList.toggle('hidden',!officer);document.getElementById('farmerPortal').classList.toggle('hidden',officer);document.getElementById('tabOfficer').classList.toggle('active-tab',officer);document.getElementById('tabFarmer').classList.toggle('active-tab',!officer);document.getElementById('tabOfficer').setAttribute('aria-selected',officer);document.getElementById('tabFarmer').setAttribute('aria-selected',!officer);if(officer)setTimeout(()=>map.invalidateSize(),100)}
+function switchPortal(portal){
+  const officer=portal==='officer';
+  document.body.classList.toggle('farmer-view-active',!officer);
+  document.getElementById('officerPortal').classList.toggle('hidden',!officer);
+  document.getElementById('farmerPortal').classList.toggle('hidden',officer);
+  document.getElementById('tabOfficer').classList.toggle('active-tab',officer);
+  document.getElementById('tabFarmer').classList.toggle('active-tab',!officer);
+  document.getElementById('tabOfficer').setAttribute('aria-selected',officer);
+  document.getElementById('tabFarmer').setAttribute('aria-selected',!officer);
+  const modeSwitch=document.getElementById('satelliteModeSwitch');
+  if(modeSwitch) modeSwitch.classList.toggle('hidden',!officer);
+  const statusBar=document.getElementById('officerStatusBar');
+  if(statusBar) statusBar.classList.toggle('hidden',!officer);
+  if(officer)setTimeout(()=>map.invalidateSize(),100);
+}
 function toggleSidebar(){sidebarOpen=!sidebarOpen;document.getElementById('officerPortal').classList.toggle('sidebar-collapsed',!sidebarOpen);document.getElementById('toggleIcon').textContent=sidebarOpen?'◀':'▶';setTimeout(()=>map.invalidateSize(),300)}
 function bookOption(optionName){showToast(`Request sent for: ${optionName}`,'success')}
 
@@ -565,3 +579,8 @@ window.setAlertLanguage = setLanguage;
 
 // Initialize language and calculator
 setLanguage(currentFarmerLanguage);
+
+// Check if initial hash requested farmer portal
+if (window.location.hash === '#farmer' || window.location.hash === '#farmerPortal') {
+  switchPortal('farmer');
+}

@@ -827,13 +827,18 @@ button:focus:not(:focus-visible) {
   display: none !important;
 }
 
+body.farmer-view-active #satelliteModeSwitch,
+body.farmer-view-active #officerStatusBar {
+  display: none !important;
+}
+
 .farmer-container {
   padding: 28px 24px 60px;
   max-width: 1100px;
   margin: 0 auto;
   flex: 1 1 auto;
   min-height: 0;
-  height: calc(100vh - 104px);
+  height: calc(100vh - 64px);
   overflow-y: auto;
   box-sizing: border-box;
   background-color: var(--bg-base);
@@ -1151,7 +1156,7 @@ button:focus:not(:focus-visible) {
 
   .farmer-container {
     height: auto;
-    min-height: calc(100vh - 142px);
+    min-height: calc(100vh - 64px);
     padding: 20px 16px 50px;
     overflow-y: visible;
     flex: none;
@@ -1188,7 +1193,7 @@ button:focus:not(:focus-visible) {
 
   .farmer-container {
     height: auto;
-    min-height: calc(100vh - 130px);
+    min-height: calc(100vh - 64px);
     padding: 16px 12px 48px;
     overflow-y: visible;
   }

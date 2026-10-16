@@ -29,7 +29,7 @@
 
     <div class="nav-controls">
       <!-- SATELLITE OBSERVATION LAYER TOGGLE -->
-      <div class="mode-switch" role="tablist" aria-label="Observation mode">
+      <div id="satelliteModeSwitch" class="mode-switch" role="tablist" aria-label="Observation mode">
         <button id="btnFusion" class="mode-btn active" onclick="setObservationMode('fusion')" role="tab" aria-selected="true">
           <span class="mode-icon">🛰️</span>
           <span class="mode-text">
@@ -66,7 +66,7 @@
   </header>
 
   <!-- STATUS BAR -->
-  <div class="status-bar">
+  <div id="officerStatusBar" class="status-bar">
     <div id="modeBanner" class="status-message">
       ⚡ <strong>Active Watch:</strong> INSAT-3DS thermal scans every 30 minutes (~4 km tripwire) + Sentinel-2 (10 m) before/after field check
     </div>
