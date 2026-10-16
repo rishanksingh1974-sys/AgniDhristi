@@ -105,19 +105,28 @@ button:focus:not(:focus-visible) {
 .logo-box {
   width: 42px;
   height: 42px;
-  background: linear-gradient(135deg, #D97743, #E88C5A);
+  background: #FFFFFF;
   border-radius: 10px;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 22px;
   box-shadow: 0 0 16px rgba(217, 119, 67, 0.35);
   animation: logo-pulse 3s ease-in-out infinite;
+  overflow: hidden;
+  padding: 3px;
+  flex-shrink: 0;
+}
+
+.logo-img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
 }
 
 @keyframes logo-pulse {
-  0%, 100% { box-shadow: 0 0 16px rgba(217, 119, 67, 0.35); }
-  50% { box-shadow: 0 0 24px rgba(217, 119, 67, 0.55); }
+  0%, 100% { box-shadow: 0 0 12px rgba(217, 119, 67, 0.25); }
+  50% { box-shadow: 0 0 20px rgba(217, 119, 67, 0.5); }
 }
 
 .brand h1 {
