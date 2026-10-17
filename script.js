@@ -143,10 +143,22 @@ updateStatusCounters();renderMapLayers();renderEvidencePack(0);
 
 // Stage-1 farmer intervention state. These flows stay usable without an API connection.
 let selectedAcreage = 5;
-const STRAW_PER_ACRE = 22;
-const BIO_CNG_RATE = 180;
-const SOIL_NITROGEN_SAVING_PER_ACRE = 1000;
-const POTENTIAL_NGT_FINE_PER_ACRE = 2500;
+
+const CALC = {
+  STRAW_QTL_PER_ACRE: 17,      // reported 15.2-19.5 q/acre (JADP 2024 Punjab study); 17-18 (HT)
+  PLANT_RATE_PER_QTL: 169,     // biomass plant rate to balers; Rs160-170 reported 2025 (Tribune)
+  BALING_COST_PER_QTL: 147,    // Rs147.37/qtl baling cost (JADP 2024), proxy for baling+transport
+  NUTRIENT_VALUE_PER_QTL: 148, // per tonne: 5.5kg N + 2.3kg P2O5 + 25kg K2O at MRP prices
+                               // (urea 266.5/45kg, DAP 1350/50kg, MOP 1534/50kg) = ~Rs1,484/t.
+                               // Conservative option (N + P2O5 only): 21
+};
+// CAQM environmental compensation, per incident, by landholding (Amendment Rules, Nov 2024)
+function compensation(acres) {
+  if (acres < 2) return 5000;
+  if (acres <= 5) return 10000;  // rule text skips exactly 5 acres; treated as 10000
+  return 30000;
+}
+const STRAW_PER_ACRE = CALC.STRAW_QTL_PER_ACRE;
 
 function formatRupees(amount) {
   return `₹${Math.round(amount).toLocaleString('en-IN')}`;
@@ -173,12 +185,12 @@ const farmerTranslations = {
     scaleMin: '1 acre',
     scaleMax: '50 acres',
     resStrawLabel: 'Estimated Straw',
-    resStrawSub: '22 quintals per acre',
+    resStrawSub: '17 quintals per acre (reported 15-19.5)',
     qtlUnit: 'qtl',
-    resCashLabel: 'Instant Bio-CNG Cash Payout',
-    resCashSub: '@ ₹180 per quintal',
-    resSavingsLabel: 'Soil Nitrogen + NGT Fine Saved',
-    savingsDetail: (soil, fine) => `${soil} soil nutrients + ${fine} potential fine avoided`,
+    resCashLabel: 'Net Straw Value if Baled & Sold (est.)',
+    resCashSub: (gross, baling) => `${gross} gross - ${baling} baling @ ₹169/qtl`,
+    resSavingsLabel: 'Soil Nutrients + CAQM Compensation',
+    savingsDetail: (nutrients, comp) => `${nutrients} nutrients + up to ${comp} compensation`,
 
     // Machines
     machinesHeaderTitle: '🚜 Nearby Stubble Management Machines',
@@ -253,12 +265,12 @@ const farmerTranslations = {
     scaleMin: '1 ਏਕੜ',
     scaleMax: '50 ਏਕੜ',
     resStrawLabel: 'ਅੰਦਾਜ਼ਨ ਪਰਾਲੀ',
-    resStrawSub: '22 ਕੁਇੰਟਲ ਪ੍ਰਤੀ ਏਕੜ',
+    resStrawSub: '17 ਕੁਇੰਟਲ ਪ੍ਰਤੀ ਏਕੜ (ਰਿਪੋਰਟ ਅਨੁਸਾਰ 15-19.5)',
     qtlUnit: 'ਕੁਇੰਟਲ',
-    resCashLabel: 'ਤੁਰੰਤ ਬਾਇਓ-CNG ਨਕਦ ਭੁਗਤਾਨ',
-    resCashSub: '@ ₹180 ਪ੍ਰਤੀ ਕੁਇੰਟਲ',
-    resSavingsLabel: 'ਮਿੱਟੀ ਦੇ ਪੋਸ਼ਕ ਤੱਤ + NGT ਜੁਰਮਾਨੇ ਦੀ ਬੱਚਤ',
-    savingsDetail: (soil, fine) => `${soil} ਮਿੱਟੀ ਦੇ ਪੋਸ਼ਕ ਤੱਤ + ${fine} ਸੰਭਾਵੀ ਜੁਰਮਾਨਾ ਬਚਾਇਆ`,
+    resCashLabel: 'ਪਰਾਲੀ ਵੇਚਣ ਤੋਂ ਸ਼ੁੱਧ ਮੁੱਲ (ਅੰਦਾਜ਼ਨ)',
+    resCashSub: (gross, baling) => `${gross} ਕੁੱਲ - ${baling} ਬੇਲਿੰਗ @ ₹169/ਕੁਇੰਟਲ`,
+    resSavingsLabel: 'ਮਿੱਟੀ ਦੇ ਪੋਸ਼ਕ ਤੱਤ + CAQM ਮੁਆਵਜ਼ਾ',
+    savingsDetail: (nutrients, comp) => `${nutrients} ਪੋਸ਼ਕ ਤੱਤ + ਵੱਧ ਤੋਂ ਵੱਧ ${comp} ਮੁਆਵਜ਼ਾ`,
 
     // Machines
     machinesHeaderTitle: '🚜 ਨੇੜਲੀਆਂ ਪਰਾਲੀ ਪ੍ਰਬੰਧਨ ਮਸ਼ੀਨਾਂ',
@@ -333,12 +345,12 @@ const farmerTranslations = {
     scaleMin: '1 एकड़',
     scaleMax: '50 एकड़',
     resStrawLabel: 'अनुमानित पराली',
-    resStrawSub: '22 क्विंटल प्रति एकड़',
+    resStrawSub: '17 क्विंटल प्रति एकड़ (रिपोर्टेड 15-19.5)',
     qtlUnit: 'क्विंटल',
-    resCashLabel: 'त्वरित बायो-CNG नकद भुगतान',
-    resCashSub: '@ ₹180 प्रति क्विंटल',
-    resSavingsLabel: 'मिट्टी के पोषक तत्व + NGT जुर्माने की बचत',
-    savingsDetail: (soil, fine) => `${soil} मिट्टी के पोषक तत्व + ${fine} संभावित जुर्माना बचाया`,
+    resCashLabel: 'पराली बेचने से शुद्ध मूल्य (अनुमानित)',
+    resCashSub: (gross, baling) => `${gross} कुल - ${baling} बेलिंग @ ₹169/क्विंटल`,
+    resSavingsLabel: 'मिट्टी के पोषक तत्व + CAQM मुआवज़ा',
+    savingsDetail: (nutrients, comp) => `${nutrients} पोषक तत्व + अधिकतम ${comp} मुआवज़ा`,
 
     // Machines
     machinesHeaderTitle: '🚜 निकटवर्ती पराली प्रबंधन मशीनें',
@@ -406,10 +418,12 @@ const farmerTranslations = {
 function updatePayoutCalculator(value) {
   selectedAcreage = Number(value);
   const copy = farmerTranslations[currentFarmerLanguage] || farmerTranslations.en;
-  const straw = selectedAcreage * STRAW_PER_ACRE;
-  const cash = straw * BIO_CNG_RATE;
-  const soilSaving = selectedAcreage * SOIL_NITROGEN_SAVING_PER_ACRE;
-  const fineAvoided = selectedAcreage * POTENTIAL_NGT_FINE_PER_ACRE;
+  const straw = selectedAcreage * CALC.STRAW_QTL_PER_ACRE;
+  const gross = straw * CALC.PLANT_RATE_PER_QTL;
+  const baling = straw * CALC.BALING_COST_PER_QTL;
+  const net = Math.max(0, gross - baling);
+  const nutrients = straw * CALC.NUTRIENT_VALUE_PER_QTL;
+  const comp = compensation(selectedAcreage);
 
   const acreageEl = document.getElementById('acreageValue');
   if (acreageEl) acreageEl.textContent = selectedAcreage;
@@ -418,13 +432,16 @@ function updatePayoutCalculator(value) {
   if (strawEl) strawEl.textContent = `${straw.toLocaleString('en-IN')} ${copy.qtlUnit}`;
 
   const cashEl = document.getElementById('cashPayoutValue');
-  if (cashEl) cashEl.textContent = formatRupees(cash);
+  if (cashEl) cashEl.textContent = formatRupees(net);
+
+  const cashSubEl = document.getElementById('resCashSub');
+  if (cashSubEl) cashSubEl.textContent = copy.resCashSub(formatRupees(gross), formatRupees(baling));
 
   const savingsEl = document.getElementById('savingsValue');
-  if (savingsEl) savingsEl.textContent = formatRupees(soilSaving + fineAvoided);
+  if (savingsEl) savingsEl.textContent = formatRupees(nutrients + comp);
 
   const detailEl = document.getElementById('savingsDetail');
-  if (detailEl) detailEl.textContent = copy.savingsDetail(formatRupees(soilSaving), formatRupees(fineAvoided));
+  if (detailEl) detailEl.textContent = copy.savingsDetail(formatRupees(nutrients), formatRupees(comp));
 }
 
 function farmerConfirmation(title, content) {
@@ -533,7 +550,6 @@ function setLanguage(language) {
   setText('resStrawLabel', copy.resStrawLabel);
   setText('resStrawSub', copy.resStrawSub);
   setText('resCashLabel', copy.resCashLabel);
-  setText('resCashSub', copy.resCashSub);
   setText('resSavingsLabel', copy.resSavingsLabel);
 
   // Machines
